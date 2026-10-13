@@ -30,6 +30,9 @@ func TestRealExitIPsShareLimitsAndPersist(t *testing.T) {
 	if l == nil {
 		t.Fatal("no route")
 	}
+	if l.Claimed() || !l.ClaimExit("198.51.100.8") || !l.Claimed() {
+		t.Fatal("cached identity did not require fresh confirmation")
+	}
 	if second := p.Acquire("downloads", "", 1); second != nil {
 		second.Release()
 		t.Fatal("same public IP leased twice")
@@ -71,6 +74,9 @@ func TestDetectionRebuildsAnIndexWithActiveLeases(t *testing.T) {
 		if _, err := p.DetectEgress(t.Context(), d, endpoint); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if a.ClaimExit("192.0.2.7") || b.ClaimExit("192.0.2.7") {
+		t.Fatal("fresh detection bypassed the one-lease exit cap")
 	}
 	if l := p.Acquire("service", "", 2); l != nil {
 		l.Release()

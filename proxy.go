@@ -145,7 +145,7 @@ func (s *siteStat) observe(took time.Duration) {
 	if s.latency == nil {
 		s.latency = new(seconds)
 	} else {
-		s.latency = new(alpha*seconds + (1-alpha)*(*s.latency))
+		s.latency = new(float64(alpha*seconds) + float64((1-alpha)*(*s.latency)))
 	}
 }
 
@@ -163,7 +163,7 @@ func (s *siteStat) observeOutcome(refused bool) {
 	if s.refusal != nil {
 		prev = *s.refusal
 	}
-	s.refusal = new(alpha*x + (1-alpha)*prev)
+	s.refusal = new(float64(alpha*x) + float64((1-alpha)*prev))
 }
 
 // source is one feed listing: (URL, scope restriction). An empty site
@@ -246,7 +246,7 @@ func (e *entry) dead() bool { return e.fromFeed && e.served == 0 }
 
 // observeTransport folds one connection outcome into transportFailure.
 func (e *entry) observeTransport(failed bool) {
-	e.transportFailure = 0.2*indicator(failed) + 0.8*e.transportFailure
+	e.transportFailure = float64(0.2*indicator(failed)) + float64(0.8*e.transportFailure)
 }
 
 // available reports whether the endpoint-wide cooldown has run out.
@@ -595,13 +595,14 @@ func (p *Pool) observe(e *entry, site string, valid bool, took time.Duration, no
 		p.first[site] = first
 	}
 	s.tries++
-	s.ok = s.ok*outcomeDecay + indicator(valid)
-	s.bad = s.bad*outcomeDecay + indicator(!valid)
+	s.ok = float64(s.ok*outcomeDecay) + indicator(valid)
+	s.bad = float64(s.bad*outcomeDecay) + indicator(!valid)
 	if timed {
 		if s.duration == nil {
 			s.duration = new(seconds)
 		} else {
-			s.duration = new(0.3*seconds + 0.7*(*s.duration))
+			// Explicit rounding keeps persisted scores identical on CPUs with FMA.
+			s.duration = new(float64(0.3*seconds) + float64(0.7*(*s.duration)))
 		}
 	}
 }
@@ -897,7 +898,7 @@ func (p *Pool) Demote(ctx context.Context, site, url, reason string, took time.D
 //
 // A failed connection is punished far harder than a refusal, because a
 // rotation gives every endpoint off its bench a full turn: on c016fcf's
-// first pass amazon.de spent 429 of its 500 requests and amazon.fr 396 on
+// first pass one destination spent 429 of its 500 requests and another 396 on
 // proxies that never connected, because each came back after a minute. A
 // feed entry that has never served a page is a dead entry and sits out
 // Settings.DeadCooldown (a day) at once. One that has served, or a static
@@ -941,7 +942,7 @@ func orQuestion(site string) string {
 // request or the site: the WAF looked at the address and asked it to prove
 // it is a browser, which it cannot. On 2026-10-09 seven routes in
 // one destination's feed drew it on most requests, pass after pass, while the
-// route carrying all 151 of amazon.com.be's pages drew none — and because a
+// route carrying all 151 of a working destination's pages drew none — and because a
 // challenge page is small, it came back fast and had been *raising* those
 // routes' share. So the bench is hours rather than the minute a refusal
 // earns (Settings.ChallengeCooldown, doubling per challenge in a row up to

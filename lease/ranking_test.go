@@ -14,7 +14,7 @@ var rankingSites = []string{"keep2share", "fileboom", "cloudflare", "example", "
 // randomRoutes is an inventory whose routes carry any mix of measured and
 // unmeasured stats, on the sites ranking treats differently.
 func randomRoutes(rng *rand.Rand, n int) *Pool {
-	p := &Pool{entries: make(map[string]*entry), priors: make(map[string]*prior),
+	p := &Pool{policy: fixturePolicy, exitTTL: defaultExitTTL, entries: make(map[string]*entry), priors: make(map[string]*prior),
 		static: []string{Direct}, feeds: []string{"feed"}}
 	now := time.Now()
 	for i := range n {

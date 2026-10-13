@@ -29,11 +29,12 @@ type Observation struct {
 // Client adapts an application's HTTP stack to a lease. ThroughProxy must
 // isolate cookies and connections and must never silently bypass the route.
 // WithRoute pins subsequent requests to the client and reports observations.
+// Its string arguments are the route ID and application scope, respectively.
 type Client interface {
 	ThroughProxy(string) (Client, error)
 	NewRequest(context.Context, string, string, io.Reader) (*http.Request, error)
 	DoOnce(*http.Request) (*http.Response, error)
-	WithRoute(context.Context, string, func(Observation)) context.Context
+	WithRoute(context.Context, string, string, func(Observation)) context.Context
 	CloseIdleConnections()
 }
 
@@ -68,6 +69,24 @@ func (p *Policy) isCapped(site string) bool {
 
 // Option configures a lease pool at Open time.
 type Option func(*Pool)
+
+// WithHealthEpoch enables an explicit application-owned health migration.
+// Opening a store from another epoch forgets scores and identities, retaining
+// inventory. Omit this option to preserve health regardless of epoch metadata.
+func WithHealthEpoch(epoch int) Option {
+	return func(p *Pool) { p.healthEpoch = &epoch }
+}
+
+// WithExitTTL sets how long a measured exit is trusted for admission decisions.
+// Nonpositive values retain the default of one hour. Freshly claimed leases
+// continue holding their exit until released, even after this interval.
+func WithExitTTL(ttl time.Duration) Option {
+	return func(p *Pool) {
+		if ttl > 0 {
+			p.exitTTL = ttl
+		}
+	}
+}
 
 // WithFeedFilter restricts discovered routes to those the application's HTTP
 // adapter supports. Returning false excludes the endpoint. Static endpoints
@@ -120,7 +139,7 @@ type route struct {
 }
 
 // WithRoute pins the standard client to the request context.
-func (c *HTTPClient) WithRoute(ctx context.Context, _ string, observe func(Observation)) context.Context {
+func (c *HTTPClient) WithRoute(ctx context.Context, _, _ string, observe func(Observation)) context.Context {
 	return context.WithValue(ctx, routeKey{}, route{c, observe})
 }
 

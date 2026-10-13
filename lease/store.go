@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"time"
 
 	bolt "go.etcd.io/bbolt"
 )
@@ -15,6 +17,11 @@ import (
 var entriesBucket = []byte("proxies-v1")
 var sourcesBucket = []byte("sources-v1")
 var priorsBucket = []byte("priors-v1")
+var metaBucket = []byte("meta-v1")
+
+// healthEpochKey holds the application-supplied epoch the routes' health was
+// judged under.
+var healthEpochKey = []byte("health-epoch")
 
 func (p *Pool) openStore(path string) error {
 	if path == "" {
@@ -29,15 +36,21 @@ func (p *Pool) openStore(path string) error {
 	}
 	p.db = db
 	err = db.Update(func(tx *bolt.Tx) error {
-		for _, name := range [][]byte{entriesBucket, sourcesBucket, priorsBucket} {
+		for _, name := range [][]byte{entriesBucket, sourcesBucket, priorsBucket, metaBucket} {
 			if _, err := tx.CreateBucketIfNotExists(name); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
+	epoch := -1
 	if err == nil {
 		err = db.View(func(tx *bolt.Tx) error {
+			if v := tx.Bucket(metaBucket).Get(healthEpochKey); v != nil {
+				if n, err := strconv.Atoi(string(v)); err == nil {
+					epoch = n
+				}
+			}
 			if err := tx.Bucket(entriesBucket).ForEach(func(k, v []byte) error {
 				var e entry
 				if err := json.Unmarshal(v, &e); err != nil {
@@ -47,7 +60,7 @@ func (p *Pool) openStore(path string) error {
 				if err != nil || u != string(k) {
 					return errors.New("invalid proxy inventory record")
 				}
-				e.policy = &p.policy
+				e.policy, e.exitTTL = &p.policy, p.exitTTL
 				p.entries[e.URL] = &e
 				return nil
 			}); err != nil {
@@ -72,12 +85,51 @@ func (p *Pool) openStore(path string) error {
 				return nil
 			})
 		})
+		if err == nil && p.healthEpoch != nil && epoch != *p.healthEpoch {
+			err = p.forgetHealth()
+		}
+		if err == nil {
+			p.seedExitCooling(time.Now())
+		}
 	}
 	if err != nil {
 		db.Close()
 		return fmt.Errorf("restore proxy database: %w", err)
 	}
 	return nil
+}
+
+// forgetHealth drops every route's health, keeping the inventory: whether
+// it is shelved or cooling, what it has answered, how fast it was, which
+// exit it left by, and the priors drawn from first tries. Then it records
+// the epoch the routes are judged under from now on. See
+// WithHealthEpoch. The pool is not shared yet.
+func (p *Pool) forgetHealth() error {
+	for _, e := range p.entries {
+		e.Fails, e.Until, e.LastTested, e.LastSuccess = 0, time.Time{}, time.Time{}, time.Time{}
+		e.Sites, e.WAF = nil, wafStat{}
+		e.Exit, e.ExitAt = "", time.Time{}
+	}
+	clear(p.priors)
+	err := p.db.Update(func(tx *bolt.Tx) error {
+		entries := tx.Bucket(entriesBucket)
+		for raw, e := range p.entries {
+			if err := putJSON(entries, raw, e); err != nil {
+				return err
+			}
+		}
+		if err := tx.DeleteBucket(priorsBucket); err != nil {
+			return err
+		}
+		if _, err := tx.CreateBucket(priorsBucket); err != nil {
+			return err
+		}
+		return tx.Bucket(metaBucket).Put(healthEpochKey, []byte(strconv.Itoa(*p.healthEpoch)))
+	})
+	if err == nil {
+		p.log.Info("forgot proxy health from an earlier epoch", "routes", len(p.entries), "epoch", *p.healthEpoch)
+	}
+	return err
 }
 
 func putJSON(b *bolt.Bucket, key string, v any) error {

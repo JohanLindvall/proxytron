@@ -13,10 +13,13 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sync"
 	"testing"
 	"time"
+
+	bolt "go.etcd.io/bbolt"
 )
 
 func testPool(t *testing.T, endpoints, feeds []string) *Pool {
@@ -51,7 +54,7 @@ func TestInventoryHealthThroughputAndCooldownSurviveRestart(t *testing.T) {
 	if err := p.Close(); err != nil {
 		t.Fatal(err)
 	}
-	p2, err := Open(path, p.static, nil, p.client, p.log)
+	p2, err := Open(path, p.static, nil, p.client, p.log, testPolicy())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +77,7 @@ func TestInventoryHealthThroughputAndCooldownSurviveRestart(t *testing.T) {
 		t.Fatal("site cooldown leaked into another service")
 	}
 	other.Release()
-	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
+	if info, err := os.Stat(path); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Fatalf("database permissions: %v %v", info, err)
 	}
 }
@@ -108,6 +111,13 @@ func TestLeaseLimitsAcrossProtocolsAndConcurrentAcquisitions(t *testing.T) {
 				"https://one.example.test:8443", "socks5://one.example.test:1080",
 				"http://two.example.test:8000", "socks5://two.example.test:1080",
 			}, nil)
+			// Tried once, without a speed, so the address's limit is theirs:
+			// a route never tried answers for itself alone.
+			p.mu.Lock()
+			for _, e := range p.entries {
+				e.stat("keep2share").Tries = 1
+			}
+			p.mu.Unlock()
 			var wg sync.WaitGroup
 			start := make(chan struct{})
 			leases := make(chan *Lease, 40)
@@ -225,7 +235,7 @@ func TestParseFeedsAndRejectMalformedEndpoints(t *testing.T) {
 		{`["https://example.test:443",{"proxy":"http://example.test:8000/"},"https://example.test:443",42]`, []string{"https://example.test:443", "http://example.test:8000"}, false},
 		{`[]`, nil, false},
 		{`{"message":"not a feed"}`, nil, true},
-		{`["http://example.test:0", "http://example.test:99999", "file:///tmp/a", "direct", "http://example.test:80/path"]`, nil, true},
+		{`["http://example.test:0", "http://example.test:99999", "file:///tmp/a", "direct", "http://example.test:80/path", "ftp://example.test:1080"]`, nil, true},
 	} {
 		got, err := parseFeed([]byte(tc.body))
 		if (err != nil) != tc.bad || !slices.Equal(got, tc.want) {
@@ -300,11 +310,68 @@ func TestScoringPrefersMeasuredBandwidthWithoutRewardingRefusals(t *testing.T) {
 func TestDatabaseLockFailsPromptly(t *testing.T) {
 	p := testPool(t, []string{Direct}, nil)
 	start := time.Now()
-	if other, err := Open(p.db.Path(), []string{Direct}, nil, p.client, p.log); err == nil {
+	if other, err := Open(p.db.Path(), []string{Direct}, nil, p.client, p.log, testPolicy()); err == nil {
 		other.Close()
 		t.Fatal("opened the same database twice")
 	}
 	if time.Since(start) > 3*defaultDBTimeout {
 		t.Fatal("database lock was unbounded")
+	}
+}
+
+// A database written under an earlier health epoch keeps its inventory and
+// forgets every verdict on its routes, once: what is learned afterwards is
+// kept across later restarts.
+func TestRouteHealthFromAnEarlierEpochIsForgotten(t *testing.T) {
+	route := "http://one.example.test:8000"
+	p := testPool(t, []string{route}, nil)
+	lease := p.Acquire("keep2share", routeID(route), 1)
+	if lease == nil || !lease.ClaimExit("203.0.113.9") {
+		t.Fatal("no route")
+	}
+	lease.observe(Observation{Status: 200, Bytes: 4 << 20, Duration: 2 * time.Second})
+	lease.Cooldown(time.Now().Add(time.Hour))
+	lease.Release()
+	path := p.db.Path()
+	// As an earlier build left the database: no epoch recorded.
+	if err := p.db.Update(func(tx *bolt.Tx) error { return tx.Bucket(metaBucket).Delete(healthEpochKey) }); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopen := func() *Pool {
+		t.Helper()
+		next, err := Open(path, p.static, nil, p.client, p.log, testPolicy())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return next
+	}
+	p2 := reopen()
+	p2.mu.Lock()
+	e := p2.entries[route]
+	forgotten := e != nil && len(e.Sites) == 0 && e.Until.IsZero() && e.LastSuccess.IsZero() && e.Exit == "" && len(p2.priors) == 0
+	p2.mu.Unlock()
+	if !forgotten {
+		t.Fatalf("after the epoch changed: %+v, priors %v; want the route kept and its health forgotten", e, p2.priors)
+	}
+	// Learned under the current epoch, it is kept.
+	l := p2.Acquire("keep2share", routeID(route), 1)
+	if l == nil {
+		t.Fatal("the route was not free after its history was forgotten")
+	}
+	l.Cooldown(time.Now().Add(time.Hour))
+	l.Release()
+	if err := p2.Close(); err != nil {
+		t.Fatal(err)
+	}
+	p3 := reopen()
+	defer p3.Close()
+	p3.mu.Lock()
+	kept := p3.entries[route].stat("keep2share").Until
+	p3.mu.Unlock()
+	if kept.IsZero() {
+		t.Fatal("health learned under the current epoch was forgotten on the next restart")
 	}
 }

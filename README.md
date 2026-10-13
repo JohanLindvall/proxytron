@@ -109,9 +109,17 @@ A lease spans authentication, CAPTCHA/ticket setup, redirects and the transfer.
 Preferred route IDs allow reuse of unexpired IP-bound state. Address limits and
 cooldowns are shared across proxy ports/protocols. Calling `pool.DetectEgress`
 also groups different gateways by their observed public exit IP, including active
-leases. Until measured, routes are grouped by gateway hostname. Detection is
+leases. Untested gateway ports can be tried independently; confirmed exit claims
+enforce the per-address cap. Detection is
 explicit because probing every public-feed entry is expensive and rotating
 sessions require application-specific timing.
+
+`Lease.ClaimExit` atomically claims a freshly observed IP before the destination
+sees the request. A cached identity reserves capacity when a lease is acquired,
+but `Claimed` remains false until a fresh observation confirms it. `ProbeContext`
+counts transport failures without treating an IP service's refusal as a
+destination refusal. `WithExitTTL` controls cached-identity expiry. Applications
+choose probe fallbacks and decide how an outage of the IP services affects work.
 
 `Progress` learns bandwidth and setup delay before completion, excluding constrained
 windows. `Upgrade` atomically reserves a proven faster route when sustained expected
@@ -138,6 +146,8 @@ JSON field names; `WithLegacyImport(true)` explicitly enables one-time migration
 from an owned `proxy-memory.json`. Lease pools retain HeapLeach's Bolt schema.
 The two pool formats have separate namespaces; do not open the same file twice.
 Unreadable state fails loading rather than silently resetting health.
+`lease.WithHealthEpoch` lets applications explicitly invalidate health judged
+under an older policy while retaining inventory; it is disabled by default.
 
 The protocol layer preserves remote DNS, authentication, tolerant CONNECT replies,
 buffered tunnel bytes and SOCKS4a support. HTTPS proxy TLS is separate from

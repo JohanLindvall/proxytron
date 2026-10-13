@@ -29,15 +29,21 @@ func (p *Pool) DetectEgress(ctx context.Context, d proxytron.Detector, endpoint 
 	if p.closed || p.entries[endpoint] != e {
 		return proxytron.Egress{}, errors.New("proxytron: endpoint changed during detection")
 	}
-	e.EgressIP, e.EgressChecked = result.IP.String(), result.CheckedAt
-	// Rebuild identities for every entry: an already active lease on an alias
-	// must count against the same public address immediately.
-	p.hostIDs = nil
-	for _, entry := range p.entries {
-		entry.hostID = 0
-		entry.hostname = ""
+	e.Exit, e.ExitAt = result.IP.String(), result.CheckedAt
+	// Detection can reveal that in-flight leases share an exit. Account for
+	// all of them immediately, even if the resulting count exceeds the cap.
+	for l := range p.activeLeases {
+		if l.entry != e {
+			continue
+		}
+		p.unclaimExit(l)
+		if p.exitLeases == nil {
+			p.exitLeases = make(map[exitSite]int)
+		}
+		p.exitLeases[exitSite{e.Exit, l.site}]++
+		l.exit, l.autoExit = e.Exit, true
 	}
-	p.idx.valid = false
+	p.seedExitCooling(result.CheckedAt)
 	return result, p.saveAll()
 }
 
@@ -49,8 +55,8 @@ func (p *Pool) Egress(endpoint string) (proxytron.Egress, bool) {
 	if e == nil {
 		return proxytron.Egress{}, false
 	}
-	ip, err := netip.ParseAddr(e.EgressIP)
-	return proxytron.Egress{IP: ip, CheckedAt: e.EgressChecked}, err == nil
+	ip, err := netip.ParseAddr(e.Exit)
+	return proxytron.Egress{IP: ip, CheckedAt: e.ExitAt}, err == nil
 }
 
 // Observe records an application's classified outcome for this lease. It does

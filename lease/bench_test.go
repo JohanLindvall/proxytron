@@ -18,8 +18,8 @@ import (
 // measured, here or on another site.
 func benchPool(b *testing.B, n int) *Pool {
 	b.Helper()
-	p := &Pool{entries: make(map[string]*entry), priors: make(map[string]*prior), lastProbe: make(map[string]time.Time),
-		static: []string{Direct}, feeds: []string{"feed"}, policy: fixturePolicy, client: NewHTTPClient(nil)}
+	p := &Pool{policy: fixturePolicy, exitTTL: defaultExitTTL, entries: make(map[string]*entry), priors: make(map[string]*prior), lastProbe: make(map[string]time.Time),
+		static: []string{Direct}, feeds: []string{"feed"}, client: NewHTTPClient(nil)}
 	now := time.Now()
 	for i := range n {
 		host := i / 10
@@ -73,7 +73,7 @@ func BenchmarkUpgradeAcrossALargeInventory(b *testing.B) {
 			p.mu.Lock()
 			l := p.lease(e, site)
 			p.mu.Unlock()
-			l.waf = site == "cloudflare"
+			l.waf = p.policy.isRecovery(site)
 			l.measured, l.transferTime = true, defaultUpgradeWarmup
 			b.ReportAllocs()
 			b.ResetTimer()
@@ -94,7 +94,7 @@ func BenchmarkAcquireAcrossALargeInventory(b *testing.B) {
 			b.ReportAllocs()
 			b.ResetTimer()
 			for range b.N {
-				l := p.AcquireFor(site, "", 1, 1<<30, site == "cloudflare")
+				l := p.AcquireFor(site, "", 1, 1<<30, p.policy.isRecovery(site))
 				if l == nil {
 					b.Fatal("no route")
 				}
@@ -117,10 +117,26 @@ func referenceAvailable(p *Pool, site string, files int, now time.Time, waf bool
 		}
 	}
 	for _, e := range p.entries {
-		if !p.enabled(e) || e.Until.After(now) || cooling[identity(e.URL)] {
+		if !p.enabled(e) || e.Until.After(now) {
 			continue
 		}
-		if active[identity(e.URL)] < max(1, files) {
+		// Nor one whose known exit is held or cooling.
+		if e.Exit != "" && now.Sub(e.ExitAt) < defaultExitTTL {
+			key := exitSite{e.Exit, site}
+			if p.exitLeases[key] >= max(1, files) || p.exitCooling[key].After(now) {
+				continue
+			}
+		}
+		s := e.stat(site)
+		if s.Tries == 0 && (!waf || e.WAF.Tries == 0) {
+			// Never tried: its own leases and cooldowns, and nothing of its
+			// address's.
+			if s.active < max(1, files) && !s.Until.After(now) && !(waf && e.WAF.Until.After(now)) {
+				candidates = append(candidates, e)
+			}
+			continue
+		}
+		if !cooling[identity(e.URL)] && active[identity(e.URL)] < max(1, files) {
 			candidates = append(candidates, e)
 		}
 	}
@@ -134,7 +150,7 @@ func TestAvailableChoosesWhatThePlainScanDid(t *testing.T) {
 	rng := rand.New(rand.NewPCG(1, 2))
 	now := time.Now()
 	for round := range 200 {
-		p := &Pool{entries: make(map[string]*entry), static: []string{Direct}, feeds: []string{"feed"}}
+		p := &Pool{policy: fixturePolicy, exitTTL: defaultExitTTL, entries: make(map[string]*entry), static: []string{Direct}, feeds: []string{"feed"}}
 		for range 1 + rng.IntN(60) {
 			host := rng.IntN(12)
 			scheme := []string{"http", "https", "socks5h"}[rng.IntN(3)]
@@ -149,8 +165,14 @@ func TestAvailableChoosesWhatThePlainScanDid(t *testing.T) {
 			if rng.IntN(4) == 0 {
 				e.stat("keep2share").active = rng.IntN(3)
 			}
+			if rng.IntN(2) == 0 {
+				e.stat("keep2share").Tries = 1 + rng.IntN(3)
+			}
 			if rng.IntN(6) == 0 {
 				e.WAF.Until = now.Add(time.Hour)
+			}
+			if rng.IntN(3) == 0 {
+				e.WAF.Tries = 1
 			}
 		}
 		if rng.IntN(3) == 0 {
@@ -175,4 +197,38 @@ func urls(entries []*entry) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// Shaped like the inventory route hunting met: a few providers listing a
+// thousand ports on one address, each address busy, and most single-port
+// routes cooling, so a draw is rejected several times before one qualifies.
+func BenchmarkAcquireAmongCrowdedAddresses(b *testing.B) {
+	p := &Pool{policy: fixturePolicy, exitTTL: defaultExitTTL, entries: make(map[string]*entry), priors: make(map[string]*prior), lastProbe: make(map[string]time.Time),
+		feeds: []string{"feed"}, client: NewHTTPClient(nil)}
+	now := time.Now()
+	for host := range 5 {
+		for port := range 1000 {
+			e := p.ensure(fmt.Sprintf("socks5h://10.200.0.%d:%d", host, 10000+port), now)
+			e.Origins = []string{"feed"}
+			if port == 0 {
+				e.stat("keep2share").active = 1 // the address is in use
+			}
+		}
+	}
+	for i := range 15000 {
+		e := p.ensure(fmt.Sprintf("http://10.%d.%d.%d:8080", 100+i/65536, i/256%256, i%256), now)
+		e.Origins = []string{"feed"}
+		if i%5 != 0 {
+			e.stat("keep2share").Until = now.Add(time.Hour)
+		}
+	}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		l := p.AcquireFor("keep2share", "", 1, 1<<30, false)
+		if l == nil {
+			b.Fatal("no route")
+		}
+		l.Release()
+	}
 }

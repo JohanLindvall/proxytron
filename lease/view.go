@@ -18,7 +18,7 @@ type Query struct {
 	Site                 string
 }
 
-// Row is a credential-redacted inventory entry with measurements for a scope.
+// Row reports a credential-redacted inventory entry and its measurements.
 type Row struct {
 	ID            string    `json:"id"`
 	URL           string    `json:"url"`
@@ -36,7 +36,7 @@ type Row struct {
 	LastSuccess   time.Time `json:"lastSuccess,omitzero"`
 }
 
-// Summary counts routes by availability and measured health.
+// Summary reports aggregate route availability.
 type Summary struct {
 	Total     int `json:"total"`
 	Available int `json:"available"`
@@ -45,7 +45,7 @@ type Summary struct {
 	Untested  int `json:"untested"`
 }
 
-// SourceView reports a discovery feed's cached inventory and refresh state.
+// SourceView reports cached feed membership and refresh state.
 type SourceView struct {
 	URL        string    `json:"url"`
 	Count      int       `json:"count"`
@@ -54,7 +54,7 @@ type SourceView struct {
 	Failed     bool      `json:"failed"`
 }
 
-// Page contains a bounded inventory view and aggregate counts.
+// Page reports a bounded inventory view and aggregate counts.
 type Page struct {
 	Rows    []Row        `json:"rows"`
 	Total   int          `json:"total"`
@@ -64,7 +64,7 @@ type Page struct {
 	Sources []SourceView `json:"sources"`
 }
 
-// EmptyPage returns an empty view with a bounded page size and non-nil slices.
+// EmptyPage returns an empty view with a bounded page size.
 func EmptyPage(q Query) Page {
 	limit := q.Limit
 	if limit <= 0 {
@@ -117,9 +117,23 @@ func (p *Pool) Page(site string, q Query) Page {
 		if s.OK+s.Bad > 0 {
 			row.SuccessRate = s.OK / (s.OK + s.Bad)
 		}
+		// A route never tried answers for itself alone (untested), so its
+		// address's cooldown and leases are not its own.
+		untested := e.untested(site, p.policy.isRecovery(site))
 		until := cooling[e.host()]
+		if untested {
+			until = s.Until
+			if p.policy.isRecovery(site) && e.WAF.Until.After(until) {
+				until = e.WAF.Until
+			}
+		}
 		if e.Until.After(until) {
 			until = e.Until
+		}
+		// And a route leaving by an exit held or cooling is held back with it.
+		exit, exitKnown := e.exitKnown(now)
+		if c := p.exitCooling[exitSite{exit, site}]; exitKnown && c.After(until) {
+			until = c
 		}
 		if until.After(now) {
 			row.CooldownUntil = until
@@ -137,7 +151,7 @@ func (p *Pool) Page(site string, q Query) Page {
 		case until.After(now):
 			row.Status = "cooling"
 			page.Summary.Cooling++
-		case active[e.host()] > 0:
+		case active[e.host()] > 0 && !untested, exitKnown && p.exitLeases[exitSite{exit, site}] > 0:
 			row.Status = "busy"
 		default:
 			page.Summary.Available++

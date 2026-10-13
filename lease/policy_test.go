@@ -2,4 +2,8 @@ package lease
 
 var fixturePolicy = Policy{RecoveryScopes: []string{"cloudflare"}, CappedScopes: []string{"keep2share", "fileboom"}}
 
-func testPolicy() Option { return WithPolicy(fixturePolicy) }
+const testHealthEpoch = 2
+
+func testPolicy() Option {
+	return func(p *Pool) { WithPolicy(fixturePolicy)(p); WithHealthEpoch(testHealthEpoch)(p) }
+}

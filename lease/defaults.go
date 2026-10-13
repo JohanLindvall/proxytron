@@ -41,5 +41,6 @@ const (
 
 	// defaultDrawTries is how many routes are drawn at random, looking for an
 	// unmeasured one that could take a transfer, before listing them all.
-	defaultDrawTries = 64
+	defaultDrawTries = 1024
+	defaultExitTTL   = time.Hour
 )
