@@ -232,3 +232,15 @@ func BenchmarkAcquireAmongCrowdedAddresses(b *testing.B) {
 		l.Release()
 	}
 }
+
+// Page is asked for a page at a time, and each request used to ask about
+// every route: 230 ms and 74 MB a request in a pool of 63,000 routes, the
+// largest thing in a consumer's CPU profile while its listing was open.
+func BenchmarkPageOfALargeInventory(b *testing.B) {
+	p := benchPool(b, 60000)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for range b.N {
+		_ = p.Page("keep2share", Query{})
+	}
+}
