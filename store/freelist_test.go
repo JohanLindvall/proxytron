@@ -18,7 +18,9 @@ import (
 // allocates for what it writes, and the result opens under bbolt's defaults.
 func TestASaveDoesNotRewriteTheFreePageList(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "pool.db")
-	old, err := bolt.Open(path, 0o600, &bolt.Options{Timeout: time.Second})
+	// Pages of 4 KB whatever the platform's, so the free pages come to the
+	// same count everywhere: macOS's 16 KB pages left a third as many.
+	old, err := bolt.Open(path, 0o600, &bolt.Options{Timeout: time.Second, PageSize: 4096})
 	if err != nil {
 		t.Fatal(err)
 	}
