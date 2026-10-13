@@ -3,9 +3,11 @@
 package lease
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -127,5 +129,34 @@ func TestRemovedFeedCannotRepopulateTheLivePool(t *testing.T) {
 	<-done
 	if len(p.entries) != 1 || len(p.Page("keep2share", Query{}).Sources) != 0 {
 		t.Fatal("an obsolete discovery result changed the pool")
+	}
+}
+
+// A page cut from the best rows kept is the page a full sort would give,
+// ties and all, whatever the page and however many rows there are.
+func TestTheRowsKeptForAPageAreThoseAFullSortGives(t *testing.T) {
+	order := func(a, b Row) int {
+		if c := cmp.Compare(b.Score, a.Score); c != 0 {
+			return c
+		}
+		return strings.Compare(a.ID, b.ID)
+	}
+	rng := rand.New(rand.NewPCG(1, 2))
+	for _, n := range []int{0, 1, 7, 50, 333} {
+		rows := make([]Row, n)
+		for i := range rows {
+			rows[i] = Row{ID: fmt.Sprintf("route-%04d", rng.IntN(1000)), Score: float64(rng.IntN(20))}
+		}
+		want := slices.Clone(rows)
+		slices.SortFunc(want, order)
+		for _, k := range []int{0, 1, 5, 49, 50, n, n + 10} {
+			top := topRows{k: k, order: order}
+			for _, row := range rows {
+				top.add(row)
+			}
+			if got := top.sorted(); !slices.Equal(got, want[:min(k, n)]) {
+				t.Fatalf("n=%d k=%d: kept %v; want %v", n, k, got, want[:min(k, n)])
+			}
+		}
 	}
 }

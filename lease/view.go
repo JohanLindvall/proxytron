@@ -80,7 +80,27 @@ func (p *Pool) Page(site string, q Query) Page {
 	page := EmptyPage(q)
 	search := strings.ToLower(strings.TrimSpace(q.Search))
 	now := time.Now()
+	order := func(a, b Row) int {
+		var order int
+		switch q.Sort {
+		case "address":
+			order = strings.Compare(a.URL, b.URL)
+		case "throughput":
+			order = cmp.Compare(b.Throughput, a.Throughput)
+		case "success":
+			order = cmp.Compare(b.SuccessRate, a.SuccessRate)
+		default:
+			order = cmp.Compare(b.Score, a.Score)
+		}
+		if order == 0 {
+			order = strings.Compare(a.ID, b.ID)
+		}
+		return order
+	}
 	p.mu.Lock()
+	// Only the rows up to the end of the page asked for are kept (topRows):
+	// a slice of every route grew to tens of megabytes on every request.
+	top := topRows{k: min(max(q.Offset, 0)+page.Limit, len(p.entries)), order: order}
 	prior := p.scorePrior(site)
 	active := make(map[string]int)
 	cooling := make(map[string]time.Time)
@@ -101,7 +121,7 @@ func (p *Pool) Page(site string, q Query) Page {
 		if !enabled && s.active == 0 {
 			continue
 		}
-		row := Row{ID: routeID(e.URL), URL: redacted(e.URL), Source: "discovered",
+		row := Row{ID: e.id(), URL: e.shown(), Source: "discovered",
 			Status: "available", Throughput: s.BytesPerSecond, Active: s.active,
 			Requests: s.Tries, LastSuccess: s.LastSuccess}
 		if e.URL == Direct {
@@ -166,7 +186,8 @@ func (p *Pool) Page(site string, q Query) Page {
 			!(q.Status == "available" && row.Status == "untested") {
 			continue
 		}
-		page.Rows = append(page.Rows, row)
+		page.Total++
+		top.add(row)
 	}
 	for _, raw := range p.feeds {
 		view := SourceView{URL: redacted(raw)}
@@ -177,28 +198,66 @@ func (p *Pool) Page(site string, q Query) Page {
 	}
 	p.mu.Unlock()
 
-	// Sorting and encoding copied values never hold up a route acquisition.
-	slices.SortFunc(page.Rows, func(a, b Row) int {
-		var order int
-		switch q.Sort {
-		case "address":
-			order = strings.Compare(a.URL, b.URL)
-		case "throughput":
-			order = cmp.Compare(b.Throughput, a.Throughput)
-		case "success":
-			order = cmp.Compare(b.SuccessRate, a.SuccessRate)
-		default:
-			order = cmp.Compare(b.Score, a.Score)
-		}
-		if order == 0 {
-			order = strings.Compare(a.ID, b.ID)
-		}
-		return order
-	})
-	page.Total = len(page.Rows)
 	page.Offset = min(max(q.Offset, 0), max(page.Total-1, 0)/page.Limit*page.Limit)
-	page.Rows = page.Rows[page.Offset:min(page.Offset+page.Limit, page.Total)]
+	page.Rows = top.sorted()[page.Offset:min(page.Offset+page.Limit, page.Total)]
 	return page
+}
+
+// topRows keeps the first k of the rows it is given, in order, which must be
+// total. A page is tens of rows out of tens of thousands of routes, and a
+// caller showing the inventory may ask for one every few seconds. Building
+// and sorting a row for every route came to 230 ms and 74 MB a request in a
+// pool of 63,000. So the k best so far sit in a heap with the worst of them
+// on top, and only a row better than that one is let in.
+type topRows struct {
+	k     int
+	order func(a, b Row) int
+	rows  []Row
+}
+
+func (t *topRows) add(row Row) {
+	if len(t.rows) < t.k {
+		t.rows = append(t.rows, row)
+		for i := len(t.rows) - 1; i > 0; {
+			parent := (i - 1) / 2
+			if !t.after(i, parent) {
+				break
+			}
+			t.rows[i], t.rows[parent] = t.rows[parent], t.rows[i]
+			i = parent
+		}
+		return
+	}
+	if t.k == 0 || t.order(row, t.rows[0]) >= 0 {
+		return
+	}
+	t.rows[0] = row
+	for i := 0; ; {
+		worst, left := i, 2*i+1
+		if left < t.k && t.after(left, worst) {
+			worst = left
+		}
+		if right := left + 1; right < t.k && t.after(right, worst) {
+			worst = right
+		}
+		if worst == i {
+			return
+		}
+		t.rows[i], t.rows[worst] = t.rows[worst], t.rows[i]
+		i = worst
+	}
+}
+
+// after reports that row i comes after row j.
+func (t *topRows) after(i, j int) bool { return t.order(t.rows[i], t.rows[j]) > 0 }
+
+// sorted is the rows kept, in order.
+func (t *topRows) sorted() []Row {
+	slices.SortFunc(t.rows, t.order)
+	if t.rows == nil {
+		return []Row{}
+	}
+	return t.rows
 }
 
 func redacted(raw string) string {

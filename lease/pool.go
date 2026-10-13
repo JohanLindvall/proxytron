@@ -53,6 +53,8 @@ type entry struct {
 	hostID     int
 	route      string
 	inMeasured bool
+	// shownURL is the URL as the list shows it: see shown.
+	shownURL string
 }
 
 // host is the address a proxy is known by, without scheme or port, since
@@ -65,6 +67,15 @@ func (e *entry) host() string {
 		e.hostname = identity(e.URL)
 	}
 	return e.hostname
+}
+
+// shown is the URL as a page shows it, with any credentials redacted, worked
+// out once. Caller holds the pool's lock.
+func (e *entry) shown() string {
+	if e.shownURL == "" {
+		e.shownURL = redacted(e.URL)
+	}
+	return e.shownURL
 }
 
 // id is the route's routeID, hashed once. Caller holds the pool's lock.
