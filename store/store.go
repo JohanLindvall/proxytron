@@ -82,7 +82,11 @@ func Open(ctx context.Context, path string) (Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return nil, err
 	}
-	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: time.Second})
+	// The free-page list is kept in memory and rebuilt on open rather than
+	// rewritten on every commit, as the lease store does: a long-lived
+	// database's list made each small commit allocate in proportion to it.
+	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: time.Second,
+		FreelistType: bolt.FreelistMapType, NoFreelistSync: true})
 	if err != nil {
 		return nil, fmt.Errorf("proxytron: open store: %w", err)
 	}

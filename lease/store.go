@@ -30,7 +30,14 @@ func (p *Pool) openStore(path string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	db, err := bolt.Open(path, 0o600, &bolt.Options{Timeout: defaultDBTimeout})
+	// The pool commits once per route outcome, and a database that has been
+	// rewritten for a long time holds tens of thousands of free pages. Synced,
+	// that list was rebuilt and written on every commit: 756 KB allocated a
+	// commit on a live 284 MB database with 46,000 free pages, against 14 KB
+	// kept in memory. It is rebuilt when the database is opened instead,
+	// which took 13 ms on that file. Either way of writing opens either way.
+	db, err := bolt.Open(path, 0o600, &bolt.Options{Timeout: defaultDBTimeout,
+		FreelistType: bolt.FreelistMapType, NoFreelistSync: true})
 	if err != nil {
 		return fmt.Errorf("open proxy database: %w", err)
 	}
