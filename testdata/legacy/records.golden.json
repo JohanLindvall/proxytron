@@ -1,0 +1,166 @@
+{
+  "first": {
+    "be": [
+      24,
+      1,
+      18.439240632898873,
+      24
+    ],
+    "de": [
+      21,
+      8,
+      152.95621487600147,
+      21
+    ],
+    "fr": [
+      13,
+      5,
+      10.160176871984731,
+      13
+    ],
+    "it": [
+      26,
+      12,
+      52.286619635968236,
+      26
+    ],
+    "se": [
+      25,
+      2,
+      110.51818733906839,
+      25
+    ]
+  },
+  "rows": [
+    {
+      "url": "https://192.0.2.1:443",
+      "record": {
+        "fails": 0,
+        "first_seen": 1791631900,
+        "from_feed": true,
+        "last_seen": 1791631900,
+        "last_success": 1791631900,
+        "last_tested": null,
+        "marketplaces": [],
+        "metadata": {},
+        "origins": [
+          [
+            "https://raw.githubusercontent.com/proxifly/free-proxy-list/refs/heads/main/proxies/countries/BE/data.json",
+            "be"
+          ]
+        ],
+        "served": 3999,
+        "sites": {
+          "be": {
+            "bad": 0,
+            "challenges": 0,
+            "duration": 1.5408059864753507,
+            "fails": 0,
+            "latency": null,
+            "ok": 10,
+            "refusal": null,
+            "score": 0.27367933037297754,
+            "tries": 3656,
+            "until": 0
+          }
+        },
+        "transport_failure": 0,
+        "until": 0,
+        "url": "https://192.0.2.1:443"
+      }
+    },
+    {
+      "url": "http://192.0.2.2:80",
+      "record": {
+        "fails": 1,
+        "first_seen": 1791631900,
+        "from_feed": true,
+        "last_seen": 1791631900,
+        "last_success": null,
+        "last_tested": null,
+        "marketplaces": [],
+        "metadata": {},
+        "origins": [],
+        "served": 0,
+        "sites": {},
+        "transport_failure": 0,
+        "until": 1791639427.5164344,
+        "url": "http://192.0.2.2:80"
+      }
+    },
+    {
+      "url": "socks5h://192.0.2.3:1080",
+      "record": {
+        "fails": 1,
+        "first_seen": 1791631900,
+        "from_feed": true,
+        "last_seen": 1791631900,
+        "last_success": 1791631900,
+        "last_tested": null,
+        "marketplaces": [],
+        "metadata": {},
+        "origins": [
+          [
+            "https://raw.githubusercontent.com/proxifly/free-proxy-list/refs/heads/main/proxies/countries/DE/data.json",
+            "de"
+          ]
+        ],
+        "served": 308,
+        "sites": {
+          "de": {
+            "bad": 4.0951,
+            "challenges": 4,
+            "duration": 1.2522528720308705,
+            "fails": 0,
+            "latency": null,
+            "ok": 5.9049,
+            "refusal": null,
+            "score": 0.09632290383977084,
+            "tries": 313,
+            "until": 1791642096.0570836
+          }
+        },
+        "transport_failure": 0,
+        "until": 0,
+        "url": "socks5h://192.0.2.3:1080"
+      }
+    },
+    {
+      "url": "http://192.0.2.4:7080",
+      "record": {
+        "fails": 0,
+        "first_seen": 1791631900,
+        "from_feed": true,
+        "last_seen": 1791631900,
+        "last_success": 1791631900,
+        "last_tested": null,
+        "marketplaces": [],
+        "metadata": {},
+        "origins": [
+          [
+            "https://raw.githubusercontent.com/proxifly/free-proxy-list/refs/heads/main/proxies/countries/SE/data.json",
+            "se"
+          ]
+        ],
+        "served": 1,
+        "sites": {
+          "se": {
+            "bad": 3.3661,
+            "challenges": 0,
+            "duration": 0.1160723355824535,
+            "fails": 0,
+            "latency": null,
+            "ok": 0.729,
+            "refusal": null,
+            "score": 0.017894940236529183,
+            "tries": 5,
+            "until": 0
+          }
+        },
+        "transport_failure": 0,
+        "until": 0,
+        "url": "http://192.0.2.4:7080"
+      }
+    }
+  ]
+}

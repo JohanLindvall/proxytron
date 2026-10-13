@@ -1,0 +1,156 @@
+{
+  "all": [
+    {
+      "url": "https://192.0.2.1:443",
+      "marketplaces": [
+        "be"
+      ],
+      "latency": 1.67,
+      "refusal": 0,
+      "transport_fails": 0,
+      "transport_failure": 0,
+      "served": 4507,
+      "cooling": 0,
+      "sites": {
+        "be": {
+          "latency": 1.67,
+          "refusal": 0,
+          "fails": 0,
+          "challenges": 0,
+          "cooling": 0
+        }
+      }
+    },
+    {
+      "url": "http://192.0.2.2:80",
+      "marketplaces": [
+        "be"
+      ],
+      "latency": null,
+      "refusal": null,
+      "transport_fails": 1,
+      "transport_failure": 0,
+      "served": 0,
+      "cooling": 7527.5,
+      "sites": {
+        "be": {
+          "latency": null,
+          "refusal": null,
+          "fails": 0,
+          "challenges": 0,
+          "cooling": 0
+        }
+      }
+    },
+    {
+      "url": "socks5h://192.0.2.3:1080",
+      "marketplaces": [
+        "de"
+      ],
+      "latency": null,
+      "refusal": null,
+      "transport_fails": 1,
+      "transport_failure": 0,
+      "served": 308,
+      "cooling": 0,
+      "sites": {
+        "de": {
+          "latency": null,
+          "refusal": null,
+          "fails": 0,
+          "challenges": 4,
+          "cooling": 10196.1
+        }
+      }
+    },
+    {
+      "url": "socks5h://192.0.2.9:1080",
+      "marketplaces": [
+        "de"
+      ],
+      "latency": null,
+      "refusal": null,
+      "transport_fails": 0,
+      "transport_failure": 0,
+      "served": 1,
+      "cooling": 0,
+      "sites": {
+        "de": {
+          "latency": null,
+          "refusal": null,
+          "fails": 0,
+          "challenges": 0,
+          "cooling": 0
+        }
+      }
+    }
+  ],
+  "be": [
+    {
+      "url": "https://192.0.2.1:443",
+      "site": "be",
+      "latency": 1.67,
+      "refusal": 0,
+      "fails": 0,
+      "challenges": 0,
+      "transport_failure": 0,
+      "served": 4507,
+      "bench": "",
+      "cooling": 0,
+      "tries": 4164,
+      "valid": 0.85,
+      "attempt_seconds": 1.67,
+      "valid_per_minute": 15.8
+    },
+    {
+      "url": "http://192.0.2.2:80",
+      "site": "be",
+      "latency": null,
+      "refusal": null,
+      "fails": 0,
+      "challenges": 0,
+      "transport_failure": 0,
+      "served": 0,
+      "bench": "dead",
+      "cooling": 7527.5,
+      "tries": 0,
+      "valid": null,
+      "attempt_seconds": null,
+      "valid_per_minute": null
+    }
+  ],
+  "de": [
+    {
+      "url": "socks5h://192.0.2.3:1080",
+      "site": "de",
+      "latency": null,
+      "refusal": null,
+      "fails": 0,
+      "challenges": 4,
+      "transport_failure": 0,
+      "served": 308,
+      "bench": "waf",
+      "cooling": 10196.1,
+      "tries": 313,
+      "valid": 0.55,
+      "attempt_seconds": 1.25,
+      "valid_per_minute": 5.7
+    },
+    {
+      "url": "socks5h://192.0.2.9:1080",
+      "site": "de",
+      "latency": null,
+      "refusal": null,
+      "fails": 0,
+      "challenges": 0,
+      "transport_failure": 0,
+      "served": 1,
+      "bench": "",
+      "cooling": 0,
+      "tries": 0,
+      "valid": null,
+      "attempt_seconds": null,
+      "valid_per_minute": null
+    }
+  ]
+}

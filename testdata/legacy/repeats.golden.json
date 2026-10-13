@@ -1,0 +1,117 @@
+{
+  "first": {
+    "be": [
+      24,
+      1,
+      18.439240632898873,
+      24
+    ],
+    "de": [
+      3,
+      0,
+      4.5,
+      3
+    ],
+    "fr": [
+      13,
+      5,
+      10.160176871984731,
+      13
+    ],
+    "it": [
+      26,
+      12,
+      52.286619635968236,
+      26
+    ],
+    "se": [
+      1,
+      1,
+      2.5,
+      1
+    ]
+  },
+  "rows": [
+    {
+      "url": "http://192.0.2.5:8118",
+      "record": {
+        "fails": 1,
+        "first_seen": 1791631900,
+        "from_feed": true,
+        "last_seen": 1791631900,
+        "last_success": 1791631900,
+        "last_tested": null,
+        "marketplaces": [],
+        "metadata": {},
+        "origins": [
+          [
+            "https://raw.githubusercontent.com/proxifly/free-proxy-list/refs/heads/main/proxies/countries/BE/data.json",
+            "be"
+          ],
+          [
+            "https://raw.githubusercontent.com/proxifly/free-proxy-list/refs/heads/main/proxies/countries/FR/data.json",
+            "fr"
+          ]
+        ],
+        "served": 2,
+        "sites": {
+          "be": {
+            "bad": 1,
+            "challenges": 0,
+            "duration": 0.0895,
+            "fails": 0,
+            "latency": null,
+            "ok": 0,
+            "refusal": null,
+            "score": 0.0049534499540567515,
+            "tries": 1,
+            "until": 0
+          },
+          "fr": {
+            "bad": 0,
+            "challenges": 2,
+            "duration": null,
+            "fails": 0,
+            "latency": null,
+            "ok": 0,
+            "refusal": null,
+            "score": null,
+            "tries": 0,
+            "until": 1791637635.0867887
+          }
+        },
+        "transport_failure": 0,
+        "until": 1791702892.1025026,
+        "url": "http://192.0.2.5:8118"
+      }
+    },
+    {
+      "url": "http://192.0.2.6:7144",
+      "record": {
+        "fails": 3,
+        "first_seen": 1791631900,
+        "from_feed": true,
+        "last_seen": 1791631900,
+        "last_success": null,
+        "last_tested": null,
+        "marketplaces": [],
+        "metadata": {},
+        "origins": [
+          [
+            "https://raw.githubusercontent.com/proxifly/free-proxy-list/refs/heads/main/proxies/countries/DE/data.json",
+            "de"
+          ],
+          [
+            "https://raw.githubusercontent.com/proxifly/free-proxy-list/refs/heads/main/proxies/countries/IT/data.json",
+            "it"
+          ]
+        ],
+        "served": 0,
+        "sites": {},
+        "transport_failure": 0,
+        "until": 0,
+        "url": "http://192.0.2.6:7144"
+      }
+    }
+  ]
+}

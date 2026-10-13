@@ -1,0 +1,104 @@
+{
+  "first": {},
+  "rows": [
+    {
+      "url": "https://192.0.2.1:443",
+      "record": {
+        "fails": 0,
+        "first_seen": 1791631900,
+        "from_feed": true,
+        "last_seen": 1791631900,
+        "last_success": 1791631900,
+        "last_tested": null,
+        "marketplaces": [],
+        "metadata": {},
+        "origins": [],
+        "served": 3999,
+        "sites": {},
+        "transport_failure": 0,
+        "until": 0,
+        "url": "https://192.0.2.1:443"
+      }
+    },
+    {
+      "url": "http://192.0.2.2:80",
+      "record": {
+        "fails": 1,
+        "first_seen": 1791631900,
+        "from_feed": true,
+        "last_seen": 1791631900,
+        "last_success": null,
+        "last_tested": null,
+        "marketplaces": [],
+        "metadata": {},
+        "origins": [],
+        "served": 0,
+        "sites": {},
+        "transport_failure": 0,
+        "until": 1791639427.5164344,
+        "url": "http://192.0.2.2:80"
+      }
+    },
+    {
+      "url": "socks5h://192.0.2.3:1080",
+      "record": {
+        "fails": 1,
+        "first_seen": 1791631900,
+        "from_feed": true,
+        "last_seen": 1791631900,
+        "last_success": 1791631900,
+        "last_tested": null,
+        "marketplaces": [],
+        "metadata": {},
+        "origins": [
+          [
+            "https://raw.githubusercontent.com/proxifly/free-proxy-list/refs/heads/main/proxies/countries/DE/data.json",
+            "de"
+          ]
+        ],
+        "served": 308,
+        "sites": {
+          "de": {
+            "bad": 0,
+            "challenges": 4,
+            "duration": null,
+            "fails": 0,
+            "latency": null,
+            "ok": 0,
+            "refusal": null,
+            "score": null,
+            "tries": 0,
+            "until": 1791642096.0570836
+          }
+        },
+        "transport_failure": 0,
+        "until": 0,
+        "url": "socks5h://192.0.2.3:1080"
+      }
+    },
+    {
+      "url": "http://192.0.2.4:7080",
+      "record": {
+        "fails": 0,
+        "first_seen": 1791631900,
+        "from_feed": true,
+        "last_seen": 1791631900,
+        "last_success": 1791631900,
+        "last_tested": null,
+        "marketplaces": [],
+        "metadata": {},
+        "origins": [
+          [
+            "https://raw.githubusercontent.com/proxifly/free-proxy-list/refs/heads/main/proxies/countries/SE/data.json",
+            "se"
+          ]
+        ],
+        "served": 1,
+        "sites": {},
+        "transport_failure": 0,
+        "until": 0,
+        "url": "http://192.0.2.4:7080"
+      }
+    }
+  ]
+}

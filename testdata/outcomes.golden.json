@@ -1,0 +1,219 @@
+{
+  "records": [
+    {
+      "url": "http://a:80",
+      "marketplaces": [
+        "de",
+        "se"
+      ],
+      "fails": 0,
+      "transport_failure": 0.0,
+      "sites": {
+        "se": {
+          "latency": 1.1,
+          "refusal": 0.0,
+          "fails": 0,
+          "challenges": 0,
+          "ok": 1.9,
+          "bad": 0.0,
+          "tries": 2,
+          "duration": 1.1,
+          "until": 0.0,
+          "score": 0.14564024966899944
+        },
+        "de": {
+          "latency": null,
+          "refusal": 0.2,
+          "fails": 1,
+          "challenges": 0,
+          "ok": 0.0,
+          "bad": 1.0,
+          "tries": 1,
+          "duration": 0.5,
+          "until": 1760010060.5,
+          "score": 0.014545454545454544
+        }
+      },
+      "served": 2,
+      "from_feed": true,
+      "first_seen": 1760010000.5,
+      "last_seen": 1760010000.5,
+      "last_tested": 1760010000.5,
+      "last_success": 1760010000.5,
+      "origins": [
+        [
+          "https://f/DE.json",
+          "de"
+        ],
+        [
+          "https://f/SE.json",
+          "se"
+        ]
+      ],
+      "metadata": {
+        "https://f/SE.json": {
+          "proxy": "http://a:80",
+          "score": 1,
+          "geo": {
+            "country": "SE"
+          },
+          "x": 1.5,
+          "u": "\u00f6"
+        }
+      },
+      "until": 0.0
+    },
+    {
+      "url": "socks5h://u:p@b:1080",
+      "marketplaces": [],
+      "fails": 1,
+      "transport_failure": 0.2,
+      "sites": {
+        "se": {
+          "latency": null,
+          "refusal": 0.2,
+          "fails": 0,
+          "challenges": 1,
+          "ok": 0.0,
+          "bad": 1.0,
+          "tries": 1,
+          "duration": 0.3,
+          "until": 1760013600.5,
+          "score": 0.027510316368638238
+        },
+        "it": {
+          "latency": null,
+          "refusal": null,
+          "fails": 0,
+          "challenges": 0,
+          "ok": 0.0,
+          "bad": 1.0,
+          "tries": 1,
+          "duration": 10.0,
+          "until": 0.0,
+          "score": 0.007142857142857143
+        }
+      },
+      "served": 0,
+      "from_feed": false,
+      "first_seen": 1760010000.5,
+      "last_seen": 1760010000.5,
+      "last_tested": 1760010000.5,
+      "last_success": null,
+      "origins": [],
+      "metadata": {},
+      "until": 1760010600.5
+    }
+  ],
+  "first": {
+    "se": [
+      2,
+      1.0,
+      1.55,
+      2
+    ],
+    "de": [
+      1,
+      0.0,
+      0.5,
+      1
+    ],
+    "it": [
+      1,
+      0.0,
+      10.0,
+      1
+    ]
+  },
+  "health": [
+    {
+      "url": "http://a:80",
+      "marketplaces": [
+        "de",
+        "se"
+      ],
+      "latency": 1.1,
+      "refusal": 0.1,
+      "transport_fails": 0,
+      "transport_failure": 0.0,
+      "served": 2,
+      "cooling": 0.0,
+      "sites": {
+        "de": {
+          "latency": null,
+          "refusal": 0.2,
+          "fails": 1,
+          "challenges": 0,
+          "cooling": 60.0
+        },
+        "se": {
+          "latency": 1.1,
+          "refusal": 0.0,
+          "fails": 0,
+          "challenges": 0,
+          "cooling": 0.0
+        }
+      }
+    },
+    {
+      "url": "socks5h://***@b:1080",
+      "marketplaces": [],
+      "latency": null,
+      "refusal": 0.2,
+      "transport_fails": 1,
+      "transport_failure": 0.2,
+      "served": 0,
+      "cooling": 600.0,
+      "sites": {
+        "it": {
+          "latency": null,
+          "refusal": null,
+          "fails": 0,
+          "challenges": 0,
+          "cooling": 0.0
+        },
+        "se": {
+          "latency": null,
+          "refusal": 0.2,
+          "fails": 0,
+          "challenges": 1,
+          "cooling": 3600.0
+        }
+      }
+    }
+  ],
+  "site_health_se": [
+    {
+      "url": "http://a:80",
+      "site": "se",
+      "latency": 1.1,
+      "refusal": 0.0,
+      "fails": 0,
+      "challenges": 0,
+      "transport_failure": 0.0,
+      "served": 2,
+      "bench": "",
+      "cooling": 0.0,
+      "tries": 2,
+      "valid": 0.66,
+      "attempt_seconds": 1.1,
+      "valid_per_minute": 8.7
+    },
+    {
+      "url": "socks5h://***@b:1080",
+      "site": "se",
+      "latency": null,
+      "refusal": 0.2,
+      "fails": 0,
+      "challenges": 1,
+      "transport_failure": 0.2,
+      "served": 0,
+      "bench": "broken",
+      "cooling": 3600.0,
+      "tries": 1,
+      "valid": 0.22,
+      "attempt_seconds": 0.3,
+      "valid_per_minute": 1.7
+    }
+  ]
+}

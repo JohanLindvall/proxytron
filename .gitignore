@@ -1,0 +1,9 @@
+*.test
+*.out
+coverage.*
+go.work
+go.work.sum
+*.db
+*.db.lock
+*.prof
+.DS_Store
