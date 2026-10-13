@@ -3,8 +3,9 @@
 [![CI](https://github.com/JohanLindvall/proxytron/actions/workflows/ci.yml/badge.svg)](https://github.com/JohanLindvall/proxytron/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/JohanLindvall/proxytron.svg)](https://pkg.go.dev/github.com/JohanLindvall/proxytron)
 
-Persistent, scored proxy pools for Go. Extracted from HeapLeach and amzscrape,
-with application policy separated from inventory, discovery and transport.
+Persistent, scored proxy pools for Go with adaptive rotation, HTTP(S)/SOCKS
+transport, transfer leases and real exit IP detection. Application policy stays
+separate from inventory, discovery and transport.
 Requires Go 1.26 or later. MIT licensed.
 
 ```sh
@@ -140,10 +141,10 @@ priors, discovery memberships and actual egress identities. Active leases are ne
 restored. Bolt files are created with mode `0600`, and lock acquisition is bounded.
 Close a pool before another process opens its file.
 
-Request pools use `store.Store` and `WithStoreOpener` to support existing databases.
-Their default is Bolt. The amzscrape adapter keeps its SQLite tables and historical
-JSON field names; `WithLegacyImport(true)` explicitly enables one-time migration
-from an owned `proxy-memory.json`. Lease pools retain HeapLeach's Bolt schema.
+Request pools use `store.Store` and `WithStoreOpener` to support existing databases;
+the default is Bolt. Adapters can retain their existing tables and historical JSON
+field names. `WithLegacyImport(true)` explicitly enables one-time migration from
+an owned `proxy-memory.json`. Lease pools preserve their existing Bolt schema.
 The two pool formats have separate namespaces; do not open the same file twice.
 Unreadable state fails loading rather than silently resetting health.
 `lease.WithHealthEpoch` lets applications explicitly invalidate health judged

@@ -1,5 +1,7 @@
 # Contributing
 
+See [AGENTS.md](AGENTS.md) for the package layout and repository-wide guidance.
+
 Keep application domains, configuration-file formats, browser fingerprints and
 response classification in adapters. Changes to selection or persistence need
 behavioral regression tests. Keep fixtures synthetic and tests independent of

@@ -153,7 +153,7 @@ func (prior scorePrior) meanRate(s siteStat) float64 {
 	return prior.expectedRate(s, chance)
 }
 
-// selectEntry follows amzscrape's throughput policy: sample each tried route's
+// selectEntry uses throughput scoring: sample each tried route's
 // chance of success, divided by its observed cost. Untried routes get ONE
 // shared draw, so thousands of dead feed entries cannot outvote a proven one
 // merely through the number of lottery tickets they hold.
