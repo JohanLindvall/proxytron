@@ -65,6 +65,49 @@ overrides and refreshes feeds between passes. Feed failures retain the last good
 inventory. Country templates, JSON records, plain lists, feed metadata, retirement
 and refresh timestamps survive restarts. Feed scores never override measured scores.
 
+## Request orchestration
+
+`Pool.Do` owns route rotation, cooldown waits, pacing and outcome reporting for a
+caller-supplied attempt. The callback constructs and finishes the request, closes
+its body, and returns an `AttemptResult`; it can retain the response data in a
+closure. Reuse your own clients and sessions across callbacks.
+
+```go
+pacer := proxytron.NewPacer(proxytron.PacerConfig{
+    MinInterval: time.Second,
+    SlowFactor: 2, MaxPenalty: 8, Decay: 0.9,
+}, nil)
+
+err := pool.Do(ctx, "catalog", proxytron.RequestOptions{
+    Attempts: 3,
+    RouteAttempts: 20,
+    MaxRouteWait: time.Minute,
+    Pacer: pacer,
+    Backoff: func(n int) time.Duration { return time.Duration(n) * time.Second },
+}, func(ctx context.Context, endpoint string) proxytron.AttemptResult {
+    // Your adapter performs and classifies one complete attempt.
+    return fetchAndClassify(ctx, endpoint)
+})
+```
+
+Return `Succeeded`, `Refused`, `TransportFailed`, `Challenged` or `Unreported`
+to choose how the runner scores the route. Do not report the same outcome again
+inside the callback. `Retry` requests another attempt; `RouteFailure` spends the
+separate route budget and skips operation backoff. Classification and the safety
+of replaying an operation remain the caller's decisions. Cancellation is unscored.
+`ErrAttemptsExhausted`, `ErrNoRoute` and `ErrRouteWait` distinguish why retries
+stopped and preserve the last attempt error for `errors.Is`/`errors.As`.
+
+Cooldown waits consume one cumulative `MaxRouteWait` budget, without spending
+attempts. The context bounds the entire operation. Direct traffic requires both
+`AllowDirect: true` and a configured `direct` pool member.
+
+Share a pacer across workers to space starts on the same proxy host, regardless
+of port, protocol or credentials. Refusals widen that host's floor and successes
+ease it. Other hosts proceed independently; canceled waiters consume no slot.
+`Pacer.ForRoute`, `Wait`, `Delay`, `Refused` and `OK` also work with custom request
+loops. Pacers own no goroutines or network resources.
+
 ## Real exit IP detection
 
 ```go
@@ -120,7 +163,33 @@ sees the request. A cached identity reserves capacity when a lease is acquired,
 but `Claimed` remains false until a fresh observation confirms it. `ProbeContext`
 counts transport failures without treating an IP service's refusal as a
 destination refusal. `WithExitTTL` controls cached-identity expiry. Applications
-choose probe fallbacks and decide how an outage of the IP services affects work.
+can use `ExitProber` to try configured IP services in order through the lease's
+existing client and session, then claim the observed address:
+
+```go
+prober := lease.ExitProber{
+    URLs: []string{"https://ip-check.example.test/ip", "https://backup.example.test/ip"},
+    Timeout: 10 * time.Second,
+}
+identity, err := prober.Claim(ctx, route)
+if err != nil { return err } // the deferred route.Release still applies
+// Start destination work using route.Context(ctx).
+```
+
+A freshly claimed lease needs no second probe; a cached identity still needs
+confirmation. `ErrExitInUse` signals a reserved or cooling exit without penalizing
+the route. Invalid replies and probe-service refusals try the next URL; transport
+failures stop immediately. The caller's cancellation is neutral, while a probe's
+own timeout counts as a transport failure.
+
+If every reply is unusable, the default is `ErrExitUnknown`, with no failure
+penalty. An optional `Reachable(ctx)` callback can check probe availability:
+`true` confirms and scores a route failure (`ErrExitProbeFailed`); `false`
+explicitly permits proceeding without a known exit during an outage. The caller
+chooses and may cache that diagnostic check. No direct check is implicit.
+`IsResponseError` adapts clients that return HTTP refusals as errors. Probe bodies
+and URLs are omitted from `ProbeResponseError` diagnostics. `ExitProber` owns no
+clients and never releases the caller's lease.
 
 `Progress` learns bandwidth and setup delay before completion, excluding constrained
 windows. `Upgrade` atomically reserves a proven faster route when sustained expected

@@ -35,6 +35,23 @@ type Detector struct {
 	Client  func(endpoint string) (HTTPDoer, error)
 }
 
+// ProbeResponseError means an IP-check service answered but did not supply a
+// usable address. It can be retried against another caller-configured service;
+// by itself it is not evidence of a broken route. Diagnostics omit reply bodies
+// and URLs, which may contain credentials. Status is zero for an invalid body.
+type ProbeResponseError struct {
+	Status int
+	Reason string
+}
+
+// Error describes the rejected response without including its contents.
+func (e *ProbeResponseError) Error() string {
+	if e.Status != 0 {
+		return fmt.Sprintf("proxytron: IP-check status %d", e.Status)
+	}
+	return "proxytron: " + e.Reason
+}
+
 // Detect measures the route's externally observed IPv4 or IPv6 address. Replies
 // are bounded to 4 KiB; malformed, ambiguous and unspecified addresses fail.
 func (d Detector) Detect(ctx context.Context, endpoint string) (Egress, error) {
@@ -71,14 +88,14 @@ func (d Detector) Detect(ctx context.Context, endpoint string) (Egress, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return Egress{}, fmt.Errorf("proxytron: IP-check status %d", resp.StatusCode)
+		return Egress{}, &ProbeResponseError{Status: resp.StatusCode}
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4097))
 	if err != nil {
 		return Egress{}, err
 	}
 	if len(body) > 4096 {
-		return Egress{}, errors.New("proxytron: IP-check reply too large")
+		return Egress{}, &ProbeResponseError{Reason: "IP-check reply too large"}
 	}
 	value := strings.TrimSpace(string(body))
 	if strings.HasPrefix(value, "{") {
@@ -87,7 +104,7 @@ func (d Detector) Detect(ctx context.Context, endpoint string) (Egress, error) {
 			Origin string `json:"origin"`
 		}
 		if err := json.Unmarshal(body, &record); err != nil {
-			return Egress{}, errors.New("proxytron: invalid IP-check JSON")
+			return Egress{}, &ProbeResponseError{Reason: "invalid IP-check JSON"}
 		}
 		value = record.IP
 		if value == "" {
@@ -96,7 +113,7 @@ func (d Detector) Detect(ctx context.Context, endpoint string) (Egress, error) {
 	}
 	ip, err := netip.ParseAddr(strings.TrimSpace(value))
 	if err != nil || ip.Zone() != "" || ip.IsUnspecified() || ip.IsMulticast() {
-		return Egress{}, errors.New("proxytron: IP-check reply is not a single unicast address")
+		return Egress{}, &ProbeResponseError{Reason: "IP-check reply is not a single unicast address"}
 	}
 	return Egress{IP: ip.Unmap(), CheckedAt: time.Now()}, nil
 }

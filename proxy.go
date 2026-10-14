@@ -432,9 +432,8 @@ func SettingsFrom(cfg *Config) Settings {
 // Demote, DemoteTransport and Punish push a failing one into a growing
 // cooldown; Refresh swaps in a new list without losing the health state of
 // endpoints that carry over. Country feeds are restricted to their
-// scope. "" from Acquire means no eligible proxy is available; the
-// caller's `direct` policy decides whether to wait for a route or fall back
-// to the machine's own address.
+// scope. "" from Acquire means no eligible route is available. Direct egress
+// requires an explicitly configured Direct member and the caller's permission.
 //
 // Build one with New, FromURLs or LoadPool. A nil *Pool is an empty one to
 // Len.
@@ -755,8 +754,8 @@ func (p *Pool) bestRate(site string, candidates []*entry, wait func(string) time
 // when one is usable now; ok is false when the pool holds none it may use
 // at all.
 //
-// What lets a site barred from the home address wait for its route instead
-// of spending attempts that send nothing; see Fetcher.Get. Both cooldowns
+// This lets callers wait for a route instead of spending attempts that send
+// nothing; Pool.Do uses it for cooldown waits. Both cooldowns
 // count, the endpoint-wide one (transport) and the site's own (refusal),
 // since either keeps Acquire from handing the endpoint out.
 func (p *Pool) WaitFor(site string, allowDirect bool, exclude map[string]bool) (time.Duration, bool) {
