@@ -14,6 +14,8 @@ go get github.com/JohanLindvall/proxytron
 
 See the [runnable examples](examples/README.md) for persistent request rotation
 and exit-confirmed transfers with complete client and lease cleanup.
+The [comparison with other open source libraries](docs/comparison.md) covers
+tradeoffs in selection, persistence and transfer leasing.
 
 | Package | Purpose |
 | --- | --- |
