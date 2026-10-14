@@ -12,6 +12,9 @@ Requires Go 1.26 or later. MIT licensed.
 go get github.com/JohanLindvall/proxytron
 ```
 
+See the [runnable examples](examples/README.md) for persistent request rotation
+and exit-confirmed transfers with complete client and lease cleanup.
+
 | Package | Purpose |
 | --- | --- |
 | `proxytron` | Request rotation, discovery, HTTP(S)/SOCKS dialing and real exit IP detection |

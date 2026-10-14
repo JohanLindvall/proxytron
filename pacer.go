@@ -122,6 +122,14 @@ func (p *Pacer) OK() {
 	p.penalty = max(1, p.penalty*p.config.Decay)
 }
 
+// Penalty returns this host's current multiplier on MinInterval. It starts at
+// one and remains observable when pacing is disabled, for health diagnostics.
+func (p *Pacer) Penalty() float64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.penalty
+}
+
 // Delay estimates the wait for this host without taking a slot. It never waits
 // for a sleeping request and can be used in Pool.Acquire's wait callback.
 func (p *Pacer) Delay() time.Duration {

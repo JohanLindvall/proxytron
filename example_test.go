@@ -65,3 +65,15 @@ func ExamplePacer() {
 	// Call httpRoute.Wait(ctx) before sending and Refused or OK afterward.
 	// Output: true
 }
+
+func ExamplePacer_Penalty() {
+	pacer := proxytron.NewPacer(proxytron.PacerConfig{SlowFactor: 2, Decay: 0.5}, nil)
+	route := pacer.ForRoute("http://proxy.example.test:8080")
+	route.Refused()
+	fmt.Println(route.Penalty())
+	route.OK()
+	fmt.Println(route.Penalty())
+	// Output:
+	// 2
+	// 1
+}
