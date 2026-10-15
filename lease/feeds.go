@@ -182,7 +182,7 @@ func (p *Pool) shortOfRoutes(now time.Time) bool {
 			}
 			starting := s.active > 0 && s.BytesPerSecond == 0
 			scored := s.OK > 0 && prior.entryRate(e, site, p.policy.isRecovery(site), 0) >= threshold
-			if starting || ((p.enabled(e) || s.active > 0) && scored) {
+			if starting || ((p.enabled(e, site) || s.active > 0) && scored) {
 				ready[key] = true
 				if len(ready) >= wanted {
 					break

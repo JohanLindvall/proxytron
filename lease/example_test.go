@@ -37,6 +37,57 @@ func ExampleWithProxyType() {
 	// Output: socks5h://socks.example.test:1080
 }
 
+func ExampleWithScopeProxyType() {
+	dir, err := os.MkdirTemp("", "proxytron-example-")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(dir)
+	// The scope's restriction holds from Open on, on top of the pool's own.
+	pool, err := lease.Open(filepath.Join(dir, "leases.db"), []string{
+		"http://http.example.test:8080",
+		"socks5h://socks.example.test:1080",
+	}, nil, nil, nil, lease.WithScopeProxyType("downloads", proxytron.ProxyTypeHTTP))
+	if err != nil {
+		panic(err)
+	}
+	defer pool.Close()
+	route := pool.Acquire("downloads", "", 1)
+	if route == nil {
+		panic("no HTTP route available")
+	}
+	defer route.Release()
+	fmt.Println(route.Endpoint())
+	// Output: http://http.example.test:8080
+}
+
+func ExamplePool_SetScopeProxyType() {
+	dir, err := os.MkdirTemp("", "proxytron-example-")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(dir)
+	pool, err := lease.Open(filepath.Join(dir, "leases.db"), []string{
+		"http://http.example.test:8080",
+		"socks5h://socks.example.test:1080",
+	}, nil, nil, nil)
+	if err != nil {
+		panic(err)
+	}
+	defer pool.Close()
+	// One scope takes SOCKS routes alone; the others keep every protocol.
+	if err := pool.SetScopeProxyType("downloads", proxytron.ProxyTypeSOCKS); err != nil {
+		panic(err)
+	}
+	route := pool.Acquire("downloads", "", 1)
+	if route == nil {
+		panic("no SOCKS route available")
+	}
+	defer route.Release()
+	fmt.Println(route.Endpoint())
+	// Output: socks5h://socks.example.test:1080
+}
+
 func ExampleExitProber_Claim() {
 	// A loopback proxy supplies a synthetic IP-check response in this example.
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

@@ -117,7 +117,7 @@ func (p *Pool) Page(site string, q Query) Page {
 	}
 	for _, e := range p.entries {
 		s := e.scoreStat(site)
-		enabled := p.enabled(e)
+		enabled := p.enabled(e, site)
 		if !enabled && s.active == 0 {
 			continue
 		}

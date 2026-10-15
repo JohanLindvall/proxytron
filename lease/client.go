@@ -80,6 +80,17 @@ func WithProxyType(t proxytron.ProxyType) Option {
 	return func(p *Pool) { p.proxyType = t }
 }
 
+// WithScopeProxyType restricts selection for one scope to t from Open on, as
+// Pool.SetScopeProxyType does later. Open rejects unsupported types.
+func WithScopeProxyType(scope string, t proxytron.ProxyType) Option {
+	return func(p *Pool) {
+		if p.scopeTypes == nil {
+			p.scopeTypes = make(map[string]proxytron.ProxyType)
+		}
+		p.scopeTypes[scope] = t
+	}
+}
+
 // WithHealthEpoch enables an explicit application-owned health migration.
 // Opening a store from another epoch forgets scores and identities, retaining
 // inventory. Omit this option to preserve health regardless of epoch metadata.
