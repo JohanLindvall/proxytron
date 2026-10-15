@@ -120,6 +120,7 @@ type prior struct {
 // reuse an idle route, but must still honour its persisted host cooldown.
 type Pool struct {
 	proxyType     proxytron.ProxyType
+	scopeTypes    map[string]proxytron.ProxyType // on top of proxyType; guarded by mu
 	feedFilter    func(string) bool
 	isChallenge   func(error) bool
 	policy        Policy
@@ -212,6 +213,11 @@ func Open(path string, endpoints, feeds []string, client Client, log *slog.Logge
 	if err := p.proxyType.Validate(); err != nil {
 		return nil, err
 	}
+	for _, t := range p.scopeTypes {
+		if err := t.Validate(); err != nil {
+			return nil, err
+		}
+	}
 	if err := p.openStore(path); err != nil {
 		return nil, err
 	}
@@ -236,8 +242,8 @@ func (p *Pool) ensure(raw string, now time.Time) *entry {
 	return e
 }
 
-func (p *Pool) enabled(e *entry) bool {
-	if !p.proxyType.Allows(e.URL) {
+func (p *Pool) enabled(e *entry, site string) bool {
+	if !p.proxyType.Allows(e.URL) || !p.scopeTypes[site].Allows(e.URL) {
 		return false
 	}
 	if slices.Contains(p.static, e.URL) {
@@ -249,6 +255,31 @@ func (p *Pool) enabled(e *entry) bool {
 		}
 	}
 	return false
+}
+
+// SetScopeProxyType restricts selection for one scope to t, on top of the pool's
+// own type (WithProxyType): a route must be allowed by both. It holds from the
+// next acquisition, preferred route, adaptive upgrade and demand estimate on;
+// leases already granted are left alone. A specific type excludes Direct for
+// the scope, and no matching route means a nil lease, never fallback to another
+// type or direct egress. proxytron.ProxyTypeAny lifts the scope's restriction.
+// An unsupported type is rejected and leaves the restriction as it was.
+// Inventory and health are retained, and the restriction is not persisted.
+func (p *Pool) SetScopeProxyType(scope string, t proxytron.ProxyType) error {
+	if err := t.Validate(); err != nil {
+		return err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if t == proxytron.ProxyTypeAny {
+		delete(p.scopeTypes, scope)
+		return nil
+	}
+	if p.scopeTypes == nil {
+		p.scopeTypes = make(map[string]proxytron.ProxyType)
+	}
+	p.scopeTypes[scope] = t
+	return nil
 }
 
 // Start refreshes in the background. Restored routes can be used immediately;
@@ -352,13 +383,13 @@ func (l *Lease) Address() string {
 	return u.String()
 }
 
-// Configured checks a reserved replacement again after a live source edit.
-// Existing requests can finish on removed routes; a not-yet-used upgrade
-// should not start a new request there.
+// Configured checks a reserved replacement again after a live source edit or a
+// change of its scope's proxy type. Existing requests can finish on removed or
+// excluded routes; a not-yet-used upgrade should not start a new request there.
 func (l *Lease) Configured() bool {
 	l.pool.mu.Lock()
 	defer l.pool.mu.Unlock()
-	return !l.pool.closed && l.pool.enabled(l.entry)
+	return !l.pool.closed && l.pool.enabled(l.entry, l.site)
 }
 
 // Context pins requests to the reserved client and outcome observer.
@@ -504,12 +535,12 @@ func (p *Pool) available(site string, files int, now time.Time, waf bool) []*ent
 			continue
 		}
 		if e.untested(site, waf) { // see untested
-			if p.enabled(e) && e.freeOnItsOwn(site, files, now, waf) {
+			if p.enabled(e, site) && e.freeOnItsOwn(site, files, now, waf) {
 				candidates = append(candidates, e)
 			}
 			continue
 		}
-		if a := p.addresses[e.hostID]; a.cooling || a.active >= max(1, files) || !p.enabled(e) {
+		if a := p.addresses[e.hostID]; a.cooling || a.active >= max(1, files) || !p.enabled(e, site) {
 			continue
 		}
 		candidates = append(candidates, e)

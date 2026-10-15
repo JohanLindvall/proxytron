@@ -37,7 +37,7 @@ func (p *Pool) measuredPrior(site string) scorePrior {
 func (p *Pool) meanBandwidth(site string) float64 {
 	bandwidth, sampled := 0.0, 0
 	for _, e := range p.index().measured {
-		if speed := e.speed(site); speed > 0 && p.enabled(e) {
+		if speed := e.speed(site); speed > 0 && p.enabled(e, site) {
 			bandwidth += speed
 			sampled++
 		}

@@ -100,6 +100,14 @@ exhaustion returns an empty route or nil lease. Inventory and health remain stor
 so reopening with another type preserves their history. Supply the option each
 time a pool is created; the restriction itself is not persisted.
 
+A lease pool can also restrict one scope on top of its own type, and change that
+while it runs: pass `lease.WithScopeProxyType(scope, t)` to `lease.Open`, or call
+`pool.SetScopeProxyType(scope, t)` at any time. A route must then be allowed by
+both. The change holds from the next acquisition, preferred route, adaptive upgrade
+and demand estimate on, and `Lease.Configured` reports a reserved route the scope
+now excludes. Leases already granted are left alone, other scopes are unaffected,
+and `proxytron.ProxyTypeAny` lifts the scope's restriction.
+
 SOCKS does not add `Forwarded` or `X-Forwarded-For` headers as part of its protocol,
 but choosing SOCKS does **not** guarantee anonymity. A proxy can still modify
 plaintext HTTP. Use HTTPS destinations with certificate verification enabled to

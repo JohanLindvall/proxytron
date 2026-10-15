@@ -117,7 +117,7 @@ func referenceAvailable(p *Pool, site string, files int, now time.Time, waf bool
 		}
 	}
 	for _, e := range p.entries {
-		if !p.enabled(e) || e.Until.After(now) {
+		if !p.enabled(e, site) || e.Until.After(now) {
 			continue
 		}
 		// Nor one whose known exit is held or cooling.
