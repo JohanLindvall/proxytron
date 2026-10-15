@@ -70,6 +70,46 @@ overrides and refreshes feeds between passes. Feed failures retain the last good
 inventory. Country templates, JSON records, plain lists, feed metadata, retirement
 and refresh timestamps survive restarts. Feed scores never override measured scores.
 
+## Selecting proxy protocols
+
+Choose SOCKS TCP routes with `WithProxyType`:
+
+```go
+pool := proxytron.FromURLs([]string{
+    "http://proxy.example.test:8080",
+    "socks5h://proxy.example.test:1080",
+}, proxytron.WithProxyType(proxytron.ProxyTypeSOCKS))
+defer pool.Close()
+
+route := pool.Acquire("catalog", false, nil, nil)
+// route is the SOCKS endpoint, or empty if no matching route is available.
+```
+
+| Type | Eligible protocols |
+| --- | --- |
+| `ProxyTypeAny` (default) | All configured protocols, with existing direct-route permissions |
+| `ProxyTypeSOCKS` | `socks4`, `socks4a`, `socks5`, `socks5h` |
+| `ProxyTypeHTTP` | `http`, `https` |
+
+Pass the same option to `LoadPool` or `NewLive`. For transfers, pass
+`lease.WithProxyType(proxytron.ProxyTypeSOCKS)` to `lease.Open`. The restriction
+applies to static, discovered and restored routes, retries, cooldown waits,
+preferred leases and adaptive upgrades. It survives inventory refreshes and live
+overrides. A specific type excludes `direct` even with `AllowDirect: true`;
+exhaustion returns an empty route or nil lease. Inventory and health remain stored
+so reopening with another type preserves their history. Supply the option each
+time a pool is created; the restriction itself is not persisted.
+
+SOCKS does not add `Forwarded` or `X-Forwarded-For` headers as part of its protocol,
+but choosing SOCKS does **not** guarantee anonymity. A proxy can still modify
+plaintext HTTP. Use HTTPS destinations with certificate verification enabled to
+protect requests from proxy header injection. HTTP(S) proxies also tunnel HTTPS
+destinations using CONNECT; an `https://` proxy URL alone only secures the hop to
+the proxy. Headers supplied by your application are sent unchanged. See
+[SOCKS5](https://www.rfc-editor.org/rfc/rfc1928.html),
+[CONNECT](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.3.6) and
+[TLS integrity](https://www.rfc-editor.org/rfc/rfc8446.html#section-1).
+
 ## Request orchestration
 
 `Pool.Do` owns route rotation, cooldown waits, pacing and outcome reporting for a

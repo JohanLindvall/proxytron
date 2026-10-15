@@ -9,8 +9,33 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/JohanLindvall/proxytron"
 	"github.com/JohanLindvall/proxytron/lease"
 )
+
+func ExampleWithProxyType() {
+	dir, err := os.MkdirTemp("", "proxytron-example-")
+	if err != nil {
+		panic(err)
+	}
+	defer os.RemoveAll(dir)
+	pool, err := lease.Open(filepath.Join(dir, "leases.db"), []string{
+		"http://http.example.test:8080",
+		"socks5h://socks.example.test:1080",
+	}, nil, nil, nil, lease.WithProxyType(proxytron.ProxyTypeSOCKS))
+	if err != nil {
+		panic(err)
+	}
+	defer pool.Close()
+	route := pool.Acquire("downloads", "", 1)
+	if route == nil {
+		panic("no SOCKS route available")
+	}
+	defer route.Release()
+	fmt.Println(route.Endpoint())
+	// Requests use route.Context(ctx); upgrades retain the same type restriction.
+	// Output: socks5h://socks.example.test:1080
+}
 
 func ExampleExitProber_Claim() {
 	// A loopback proxy supplies a synthetic IP-check response in this example.

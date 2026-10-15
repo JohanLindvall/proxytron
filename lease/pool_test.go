@@ -22,10 +22,10 @@ import (
 	bolt "go.etcd.io/bbolt"
 )
 
-func testPool(t *testing.T, endpoints, feeds []string) *Pool {
+func testPool(t *testing.T, endpoints, feeds []string, opts ...Option) *Pool {
 	t.Helper()
 	p, err := Open(filepath.Join(t.TempDir(), "proxies.db"), endpoints, feeds,
-		NewHTTPClient(nil), slog.New(slog.NewTextHandler(io.Discard, nil)), testPolicy())
+		NewHTTPClient(nil), slog.New(slog.NewTextHandler(io.Discard, nil)), append([]Option{testPolicy()}, opts...)...)
 	if err != nil {
 		t.Fatal(err)
 	}

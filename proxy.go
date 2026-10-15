@@ -234,9 +234,9 @@ func (e *entry) supports(site string) bool {
 }
 
 // mayCarry reports whether the endpoint is one of site's routes, cooling or
-// not: one it supports, and not the home address unless allowDirect.
-func (e *entry) mayCarry(site string, allowDirect bool) bool {
-	return e.supports(site) && (allowDirect || e.url != Direct)
+// not: one it supports, of the selected type, and not direct unless allowed.
+func (e *entry) mayCarry(site string, allowDirect bool, proxyType ProxyType) bool {
+	return e.supports(site) && (allowDirect || e.url != Direct) && proxyType.Allows(e.url)
 }
 
 // dead reports whether a failed connection judges the endpoint dead rather
@@ -438,10 +438,11 @@ func SettingsFrom(cfg *Config) Settings {
 // Build one with New, FromURLs or LoadPool. A nil *Pool is an empty one to
 // Len.
 type Pool struct {
-	mu       sync.Mutex
-	entries  []*entry
-	settings Settings
-	clock    Clock
+	mu        sync.Mutex
+	entries   []*entry
+	settings  Settings
+	proxyType ProxyType
+	clock     Clock
 	// rng is the source of the Thompson-sampling draws. Only used under the
 	// pool's lock.
 	rng *rand.Rand
@@ -534,15 +535,24 @@ func FromURLs(urls []string, opts ...Option) *Pool {
 	return p
 }
 
-// Len is the number of routes the pool hands out; 0 for a nil pool, so
-// `pool.Len() > 0` is the test for a pool worth asking.
+// Len is the number of routes matching the pool's proxy type, including cooling
+// routes and every scope; 0 for a nil pool. Health also includes filtered routes.
 func (p *Pool) Len() int {
 	if p == nil {
 		return 0
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return len(p.entries)
+	if p.proxyType == ProxyTypeAny {
+		return len(p.entries)
+	}
+	n := 0
+	for _, e := range p.entries {
+		if p.proxyType.Allows(e.url) {
+			n++
+		}
+	}
+	return n
 }
 
 // now reads the pool's clock. A real clock's readings carry a monotonic
@@ -663,8 +673,7 @@ func (p *Pool) Acquire(site string, allowDirect bool, exclude map[string]bool,
 	now := p.now()
 	var live []*entry
 	for _, e := range p.entries {
-		if e.supports(site) && e.available(now) && e.stat(site).available(now) &&
-			(allowDirect || e.url != Direct) {
+		if e.mayCarry(site, allowDirect, p.proxyType) && e.available(now) && e.stat(site).available(now) {
 			live = append(live, e)
 		}
 	}
@@ -764,7 +773,7 @@ func (p *Pool) WaitFor(site string, allowDirect bool, exclude map[string]bool) (
 	now := p.now()
 	var waits []time.Duration
 	for _, e := range p.entries {
-		if e.mayCarry(site, allowDirect) && !exclude[e.url] {
+		if e.mayCarry(site, allowDirect, p.proxyType) && !exclude[e.url] {
 			waits = append(waits, max(0, later(e.cooldownUntil, e.stat(site).cooldownUntil).Sub(now)))
 		}
 	}
@@ -788,7 +797,7 @@ func (p *Pool) RefusedCooling(site string, allowDirect bool) bool {
 	defer p.mu.Unlock()
 	now := p.now()
 	for _, e := range p.entries {
-		if s, ok := e.sites[site]; ok && e.mayCarry(site, allowDirect) && s.refusalBench(now) {
+		if s, ok := e.sites[site]; ok && e.mayCarry(site, allowDirect, p.proxyType) && s.refusalBench(now) {
 			return true
 		}
 	}
@@ -801,7 +810,7 @@ func (p *Pool) PathCount(site string, allowDirect bool) int {
 	defer p.mu.Unlock()
 	n := 0
 	for _, e := range p.entries {
-		if e.mayCarry(site, allowDirect) {
+		if e.mayCarry(site, allowDirect, p.proxyType) {
 			n++
 		}
 	}

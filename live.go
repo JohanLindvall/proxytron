@@ -32,6 +32,10 @@ func LoadPool(ctx context.Context, cfg *Config, marketplaces []string, database 
 		return nil, err
 	}
 	pool := New(append([]Option{WithSettings(SettingsFrom(cfg))}, opts...)...)
+	if err := pool.proxyType.Validate(); err != nil {
+		_ = pool.Close()
+		return nil, err
+	}
 	if database != "" {
 		if err := pool.attach(ctx, database, cfg, marketplaces); err != nil {
 			_ = pool.Close()
@@ -412,7 +416,7 @@ func duePending(pool *Pool, cfg *Config, marketplaces []string, sources []source
 	short := func(site string) bool {
 		n := 0
 		for _, e := range pool.entries {
-			if e.url != Direct && e.supports(site) && e.available(t) && e.stat(site).available(t) {
+			if e.mayCarry(site, false, pool.proxyType) && e.available(t) && e.stat(site).available(t) {
 				n++
 			}
 		}

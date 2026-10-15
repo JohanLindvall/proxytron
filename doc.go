@@ -7,6 +7,8 @@
 // discovery. FromURLs constructs an in-memory pool from already validated URLs.
 // A direct route must be explicitly enabled by the application; an empty
 // acquisition means no eligible route, never permission to bypass the pool.
+// WithProxyType restricts selection to SOCKS TCP proxies or HTTP(S) proxies,
+// without discarding inventory or permitting fallback to another route type.
 // Pool.Do adds callback-driven retries with separate operation and route budgets.
 // Pacer shares adaptive request spacing across routes on the same proxy host.
 //

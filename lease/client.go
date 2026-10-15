@@ -70,6 +70,16 @@ func (p *Policy) isCapped(site string) bool {
 // Option configures a lease pool at Open time.
 type Option func(*Pool)
 
+// WithProxyType restricts selection to t for static, discovered and restored
+// routes, including preferred routes and adaptive upgrades. A specific type
+// excludes Direct. No matching route means a nil lease, never fallback to another
+// type or direct egress. Inventory and health are retained. The restriction lasts
+// for the pool's lifetime, including Configure calls; the default is
+// proxytron.ProxyTypeAny. Open rejects unsupported types.
+func WithProxyType(t proxytron.ProxyType) Option {
+	return func(p *Pool) { p.proxyType = t }
+}
+
 // WithHealthEpoch enables an explicit application-owned health migration.
 // Opening a store from another epoch forgets scores and identities, retaining
 // inventory. Omit this option to preserve health regardless of epoch metadata.

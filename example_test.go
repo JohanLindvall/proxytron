@@ -19,6 +19,18 @@ func ExamplePool() {
 	// Output: 1
 }
 
+func ExampleWithProxyType() {
+	pool := proxytron.FromURLs([]string{
+		"http://http.example.test:8080",
+		"socks5h://socks.example.test:1080",
+		proxytron.Direct,
+	}, proxytron.WithProxyType(proxytron.ProxyTypeSOCKS))
+	defer pool.Close()
+	fmt.Println(pool.Acquire("catalog", true, nil, nil))
+	// A type restriction also excludes an explicitly configured direct route.
+	// Output: socks5h://socks.example.test:1080
+}
+
 func ExampleParseFeed() {
 	entries, err := proxytron.ParseFeed([]byte(`[
 	  {"proxy":"socks5://proxy.example.test:1080","geolocation":{"country":"SE"}},

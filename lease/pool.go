@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/JohanLindvall/proxytron"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -118,6 +119,7 @@ type prior struct {
 // Pool owns the Bolt database and never stores active leases. A restart may
 // reuse an idle route, but must still honour its persisted host cooldown.
 type Pool struct {
+	proxyType     proxytron.ProxyType
 	feedFilter    func(string) bool
 	isChallenge   func(error) bool
 	policy        Policy
@@ -207,6 +209,9 @@ func Open(path string, endpoints, feeds []string, client Client, log *slog.Logge
 	for _, opt := range opts {
 		opt(p)
 	}
+	if err := p.proxyType.Validate(); err != nil {
+		return nil, err
+	}
 	if err := p.openStore(path); err != nil {
 		return nil, err
 	}
@@ -232,6 +237,9 @@ func (p *Pool) ensure(raw string, now time.Time) *entry {
 }
 
 func (p *Pool) enabled(e *entry) bool {
+	if !p.proxyType.Allows(e.URL) {
+		return false
+	}
 	if slices.Contains(p.static, e.URL) {
 		return true
 	}
