@@ -1,297 +1,164 @@
-# proxytron
+# Proxytron
+
+**Proxy pools for Go that learn from your requests and remember what works.**
 
 [![CI](https://github.com/JohanLindvall/proxytron/actions/workflows/ci.yml/badge.svg)](https://github.com/JohanLindvall/proxytron/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/JohanLindvall/proxytron.svg)](https://pkg.go.dev/github.com/JohanLindvall/proxytron)
+[![Go version](https://img.shields.io/github/go-mod/go-version/JohanLindvall/proxytron)](go.mod)
+[![Release](https://img.shields.io/github/v/release/JohanLindvall/proxytron)](https://github.com/JohanLindvall/proxytron/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Persistent, scored proxy pools for Go with adaptive rotation, HTTP(S)/SOCKS
-transport, transfer leases and real exit IP detection. Application policy stays
-separate from inventory, discovery and transport.
-Requires Go 1.26 or later. MIT licensed.
+Proxytron selects and rotates HTTP(S) and SOCKS proxies, learns which routes
+deliver successful requests, and persists their health across restarts. For long
+transfers, it reserves routes through setup and download, with limits shared by
+observed exit IP.
+
+[Quickstart](#quickstart) · [User guide](docs/guide.md) ·
+[Examples](examples/README.md) · [API reference](https://pkg.go.dev/github.com/JohanLindvall/proxytron) ·
+[Get help](SUPPORT.md) · [Contribute](CONTRIBUTING.md)
+
+## Why Proxytron?
+
+- **Learn from useful work.** Adaptive selection accounts for successful
+  responses, elapsed time, failure cost and optional pacing. Round-robin is also
+  available.
+- **Keep what you learn.** Bolt persistence retains inventory, measured health,
+  cooldowns and discovery state between runs.
+- **Handle failures at the right scope.** A service refusal or challenge affects
+  that scope; a broken proxy connection affects the endpoint. User cancellation
+  does not penalize a route.
+- **Reserve routes for transfers.** Keep a lease through authentication and
+  download, enforce per-address limits, and reserve a faster replacement when
+  measurements justify switching.
+- **Control your routing.** Support for HTTP, HTTPS, SOCKS4(a) and SOCKS5(h),
+  explicit direct routing, separate proxy/destination TLS, and caller-configured
+  exit IP checks.
+
+Proxytron is an embedded Go library. You supply proxies or a discovery feed and
+decide what counts as a successful response, refusal or challenge. Your
+application owns cookies, browser identity and retry safety. Coordination is
+local to a pool; a custom store alone does not provide distributed reservations.
+See the [comparison and tradeoffs](docs/comparison.md) when choosing a library.
+
+## Quickstart
+
+Requires **Go 1.26 or later**.
+
+### Try it locally
+
+No proxy account, credentials or external service is needed:
+
+```sh
+git clone https://github.com/JohanLindvall/proxytron.git
+cd proxytron
+go run ./examples/quickstart
+```
+
+The demo starts two loopback proxy fixtures and a local destination, sends four
+requests through the pool, and prints:
+
+```text
+proxy A: hello from the local destination
+proxy B: hello from the local destination
+proxy A: hello from the local destination
+proxy B: hello from the local destination
+Recorded successes: 4
+```
+
+It uses round-robin to make the result repeatable. The default selector learns
+from outcomes instead. All demo traffic stays on loopback, and the demo closes
+its servers, clients and in-memory pool on exit. The first Go invocation may
+download the toolchain and module dependencies.
+Read the [complete source](examples/quickstart/main.go).
+
+### Use your own proxies
+
+Add the library from your application's module directory:
 
 ```sh
 go get github.com/JohanLindvall/proxytron
 ```
 
-See the [runnable examples](examples/README.md) for persistent request rotation
-and exit-confirmed transfers with complete client and lease cleanup.
-The [comparison with other open source libraries](docs/comparison.md) covers
-tradeoffs in selection, persistence and transfer leasing.
+From a checkout of this repository, run the persistent request example after
+replacing the placeholder destination and proxies:
 
-| Package | Purpose |
+```sh
+go run ./examples/rotate \
+  -url 'https://destination.example.test/data' \
+  -proxy 'http://proxy-a.example.test:8080' \
+  -proxy 'socks5h://proxy-b.example.test:1080' \
+  -db requests.db
+```
+
+This writes the response to stdout, reuses a client and cookie jar for each route,
+and saves health to `requests.db`. Run it again to reuse the learned state.
+Use `go run ./examples/rotate -h` for options, or see the
+[transfer example](examples/README.md#transfer-lease-and-exit-confirmation) for
+streaming a response through an exit-confirmed lease.
+
+### Choose your API
+
+| You need to… | Start here |
 | --- | --- |
-| `proxytron` | Request rotation, discovery, HTTP(S)/SOCKS dialing and real exit IP detection |
-| `proxytron/lease` | Reserved routes for setup and long transfers, address limits and adaptive upgrades |
-| `proxytron/store` | Transactional Bolt persistence and an interface for existing databases |
+| Rotate an existing list in memory | `proxytron.FromURLs` |
+| Restore health and discover routes | `proxytron.DefaultConfig` + `proxytron.LoadPool` |
+| Handle retries, pacing and cooldown waits | `Pool.Do` with your request callback |
+| Choose a route in an existing request loop | `Pool.Acquire`, then report the classified outcome |
+| Reserve a route through setup and transfer | `lease.Open`, then `AcquireFor` and `Lease.Release` |
+| Supply an existing persistence backend | `store.Store` + `proxytron.WithStoreOpener` |
 
-## Persistent request rotation
+An empty acquisition means **no eligible route**. Check it before constructing a
+transport: the low-level transport API accepts an empty endpoint as direct.
+Request-pool direct routing needs both a configured `direct` member and
+`AllowDirect: true`; lease pools require an explicitly configured `direct` member.
+Explicit proxies never silently fall back to direct egress.
 
-```go
-cfg := proxytron.DefaultConfig()
-cfg.Endpoints = []string{"http://proxy.example.test:8080"}
-// Optional: cfg.FeedURL = "https://feeds.example.test/{country}.json"
-// Optional: cfg.Scopes = []string{"se", "de"}
+## User guide
 
-pool, err := proxytron.LoadPool(ctx, &cfg, nil, "proxies.db")
-if err != nil {
-    return err
-}
-defer pool.Close()
+The detailed guides cover configuration, examples and resource ownership:
 
-route := pool.Acquire("catalog", false, nil, nil)
-if route == "" {
-    // No eligible route. WaitFor reports the next cooldown expiry.
-    return errors.New("no proxy available")
-}
-transport, err := proxytron.NewTransport(route, proxytron.TransportOptions{})
-if err != nil {
-    return err
-}
-defer transport.CloseIdleConnections()
-client := &http.Client{Transport: transport, Timeout: 30 * time.Second}
-// Make the request using client and classify its outcome in the application.
-pool.ReportOK(ctx, "catalog", route, elapsed)
-```
+<!-- Keep the original README anchors usable for existing links. -->
+<a id="persistent-request-rotation"></a>
+<a id="selecting-proxy-protocols"></a>
+<a id="request-orchestration"></a>
+<a id="real-exit-ip-detection"></a>
+<a id="transfer-leases"></a>
+<a id="persistence-and-compatibility"></a>
 
-Reuse a transport/client per route in a running application. Configure its cookie
-jar and browser identity in the application. Report `Demote` for a destination
-refusal, `DemoteTransport` for a failed proxy connection, and `Punish` for a WAF
-challenge. A response status alone cannot reliably classify these outcomes.
-Exclude user cancellations from proxy penalties.
-
-The default selector uses Thompson sampling to estimate successful responses per
-second, including failure cost and optional caller-provided pacing. Round-robin
-is also available. Scopes are arbitrary application keys: a refusal or challenge
-in one scope does not penalize another. Broken transport health is endpoint-wide.
-Never-successful feed entries receive longer cooldowns than configured routes.
-Thousands of untried routes share one exploration draw.
-
-`Live` retains the pool across passes, reconciles configuration, supports temporary
-overrides and refreshes feeds between passes. Feed failures retain the last good
-inventory. Country templates, JSON records, plain lists, feed metadata, retirement
-and refresh timestamps survive restarts. Feed scores never override measured scores.
-
-## Selecting proxy protocols
-
-Choose SOCKS TCP routes with `WithProxyType`:
-
-```go
-pool := proxytron.FromURLs([]string{
-    "http://proxy.example.test:8080",
-    "socks5h://proxy.example.test:1080",
-}, proxytron.WithProxyType(proxytron.ProxyTypeSOCKS))
-defer pool.Close()
-
-route := pool.Acquire("catalog", false, nil, nil)
-// route is the SOCKS endpoint, or empty if no matching route is available.
-```
-
-| Type | Eligible protocols |
-| --- | --- |
-| `ProxyTypeAny` (default) | All configured protocols, with existing direct-route permissions |
-| `ProxyTypeSOCKS` | `socks4`, `socks4a`, `socks5`, `socks5h` |
-| `ProxyTypeHTTP` | `http`, `https` |
-
-Pass the same option to `LoadPool` or `NewLive`. For transfers, pass
-`lease.WithProxyType(proxytron.ProxyTypeSOCKS)` to `lease.Open`. The restriction
-applies to static, discovered and restored routes, retries, cooldown waits,
-preferred leases and adaptive upgrades. It survives inventory refreshes and live
-overrides. A specific type excludes `direct` even with `AllowDirect: true`;
-exhaustion returns an empty route or nil lease. Inventory and health remain stored
-so reopening with another type preserves their history. Supply the option each
-time a pool is created; the restriction itself is not persisted.
-
-A lease pool can also restrict one scope on top of its own type, and change that
-while it runs: pass `lease.WithScopeProxyType(scope, t)` to `lease.Open`, or call
-`pool.SetScopeProxyType(scope, t)` at any time. A route must then be allowed by
-both. The change holds from the next acquisition, preferred route, adaptive upgrade
-and demand estimate on, and `Lease.Configured` reports a reserved route the scope
-now excludes. Leases already granted are left alone, other scopes are unaffected,
-and `proxytron.ProxyTypeAny` lifts the scope's restriction.
-
-SOCKS does not add `Forwarded` or `X-Forwarded-For` headers as part of its protocol,
-but choosing SOCKS does **not** guarantee anonymity. A proxy can still modify
-plaintext HTTP. Use HTTPS destinations with certificate verification enabled to
-protect requests from proxy header injection. HTTP(S) proxies also tunnel HTTPS
-destinations using CONNECT; an `https://` proxy URL alone only secures the hop to
-the proxy. Headers supplied by your application are sent unchanged. See
-[SOCKS5](https://www.rfc-editor.org/rfc/rfc1928.html),
-[CONNECT](https://www.rfc-editor.org/rfc/rfc9110.html#section-9.3.6) and
-[TLS integrity](https://www.rfc-editor.org/rfc/rfc8446.html#section-1).
-
-## Request orchestration
-
-`Pool.Do` owns route rotation, cooldown waits, pacing and outcome reporting for a
-caller-supplied attempt. The callback constructs and finishes the request, closes
-its body, and returns an `AttemptResult`; it can retain the response data in a
-closure. Reuse your own clients and sessions across callbacks.
-
-```go
-pacer := proxytron.NewPacer(proxytron.PacerConfig{
-    MinInterval: time.Second,
-    SlowFactor: 2, MaxPenalty: 8, Decay: 0.9,
-}, nil)
-
-err := pool.Do(ctx, "catalog", proxytron.RequestOptions{
-    Attempts: 3,
-    RouteAttempts: 20,
-    MaxRouteWait: time.Minute,
-    Pacer: pacer,
-    Backoff: func(n int) time.Duration { return time.Duration(n) * time.Second },
-}, func(ctx context.Context, endpoint string) proxytron.AttemptResult {
-    // Your adapter performs and classifies one complete attempt.
-    return fetchAndClassify(ctx, endpoint)
-})
-```
-
-Return `Succeeded`, `Refused`, `TransportFailed`, `Challenged` or `Unreported`
-to choose how the runner scores the route. Do not report the same outcome again
-inside the callback. `Retry` requests another attempt; `RouteFailure` spends the
-separate route budget and skips operation backoff. Classification and the safety
-of replaying an operation remain the caller's decisions. Cancellation is unscored.
-`ErrAttemptsExhausted`, `ErrNoRoute` and `ErrRouteWait` distinguish why retries
-stopped and preserve the last attempt error for `errors.Is`/`errors.As`.
-
-Cooldown waits consume one cumulative `MaxRouteWait` budget, without spending
-attempts. The context bounds the entire operation. Direct traffic requires both
-`AllowDirect: true` and a configured `direct` pool member.
-
-Share a pacer across workers to space starts on the same proxy host, regardless
-of port, protocol or credentials. Refusals widen that host's floor and successes
-ease it. Other hosts proceed independently; canceled waiters consume no slot.
-`Pacer.ForRoute`, `Wait`, `Delay`, `Refused` and `OK` also work with custom request
-loops. Pacers own no goroutines or network resources.
-
-## Real exit IP detection
-
-```go
-detector := proxytron.Detector{
-    URL: "https://ip-check.example.test/ip", // your chosen IP-check service
-    Timeout: 10 * time.Second,
-}
-identity, err := pool.DetectEgress(ctx, detector, route)
-// identity.IP is the externally observed IPv4 or IPv6 address, not the gateway's DNS/IP.
-// The identity and observation time are saved with the route's scored state.
-
-comparison, err := detector.Compare(ctx, route)
-// comparison.Direct.IP and comparison.Proxy.IP measure both paths explicitly.
-// comparison.SameIP() reports whether their observed exit addresses match.
-```
-
-No IP service is hard-coded or contacted automatically. Responses may be a plain
-address or JSON with `ip` or `origin`; ambiguous lists and oversized responses fail.
-Explicit proxies never fall back to direct egress. Supply `Detector.Client` to use
-an application's own transport and session settings. A different exit address
-does not prove anonymity; rotating gateways can change addresses between requests.
-
-## Transfer leases
-
-```go
-pool, err := lease.Open("transfers.db", endpoints, feeds, nil, nil,
-    lease.WithPolicy(lease.Policy{
-        RecoveryScopes: []string{"challenge-recovery"},
-        CappedScopes: []string{"rate-limited-service"},
-    }))
-if err != nil { return err }
-defer pool.Close()
-pool.Start(ctx)
-
-route := pool.AcquireFor("downloads", preferredRouteID, 1, remainingBytes, false)
-if route == nil { return errors.New("no transfer route available") }
-defer route.Release()
-requestContext := route.Context(ctx)
-// Use lease.HTTPClient.DoOnce, or your Client adapter, with requestContext.
-```
-
-A lease spans authentication, CAPTCHA/ticket setup, redirects and the transfer.
-Preferred route IDs allow reuse of unexpired IP-bound state. Address limits and
-cooldowns are shared across proxy ports/protocols. Calling `pool.DetectEgress`
-also groups different gateways by their observed public exit IP, including active
-leases. Untested gateway ports can be tried independently; confirmed exit claims
-enforce the per-address cap. Detection is
-explicit because probing every public-feed entry is expensive and rotating
-sessions require application-specific timing.
-
-`Lease.ClaimExit` atomically claims a freshly observed IP before the destination
-sees the request. A cached identity reserves capacity when a lease is acquired,
-but `Claimed` remains false until a fresh observation confirms it. `ProbeContext`
-counts transport failures without treating an IP service's refusal as a
-destination refusal. `WithExitTTL` controls cached-identity expiry. Applications
-can use `ExitProber` to try configured IP services in order through the lease's
-existing client and session, then claim the observed address:
-
-```go
-prober := lease.ExitProber{
-    URLs: []string{"https://ip-check.example.test/ip", "https://backup.example.test/ip"},
-    Timeout: 10 * time.Second,
-}
-identity, err := prober.Claim(ctx, route)
-if err != nil { return err } // the deferred route.Release still applies
-// Start destination work using route.Context(ctx).
-```
-
-A freshly claimed lease needs no second probe; a cached identity still needs
-confirmation. `ErrExitInUse` signals a reserved or cooling exit without penalizing
-the route. Invalid replies and probe-service refusals try the next URL; transport
-failures stop immediately. The caller's cancellation is neutral, while a probe's
-own timeout counts as a transport failure.
-
-If every reply is unusable, the default is `ErrExitUnknown`, with no failure
-penalty. An optional `Reachable(ctx)` callback can check probe availability:
-`true` confirms and scores a route failure (`ErrExitProbeFailed`); `false`
-explicitly permits proceeding without a known exit during an outage. The caller
-chooses and may cache that diagnostic check. No direct check is implicit.
-`IsResponseError` adapts clients that return HTTP refusals as errors. Probe bodies
-and URLs are omitted from `ProbeResponseError` diagnostics. `ExitProber` owns no
-clients and never releases the caller's lease.
-
-`Progress` learns bandwidth and setup delay before completion, excluding constrained
-windows. `Upgrade` atomically reserves a proven faster route when sustained expected
-savings justify switching; the application cancels the old attempt and resumes on
-the replacement. Challenge scores remain separate from ordinary service/transport
-scores. `Policy` controls which scopes borrow measurements and which speeds reflect
-service-imposed caps. `SetDemand` drives early replenishment using scored capacity.
-
-Implement `lease.Client` to retain custom TLS, cookies, challenge classification
-and request-context routing. `WithFeedFilter` limits discovery to protocols that
-adapter supports. The provided HTTP adapter supports standard `net/http` clients.
-
-## Persistence and compatibility
-
-Both pools commit outcomes and cooldowns transactionally; lease progress samples
-are batched by the refresh loop and flushed on close. Inventory includes learned
-priors, discovery memberships and actual egress identities. Active leases are never
-restored. Bolt files are created with mode `0600`, and lock acquisition is bounded.
-Close a pool before another process opens its file.
-
-Request pools use `store.Store` and `WithStoreOpener` to support existing databases;
-the default is Bolt. Adapters can retain their existing tables and historical JSON
-field names. `WithLegacyImport(true)` explicitly enables one-time migration from
-an owned `proxy-memory.json`. Lease pools preserve their existing Bolt schema.
-The two pool formats have separate namespaces; do not open the same file twice.
-Unreadable state fails loading rather than silently resetting health.
-`lease.WithHealthEpoch` lets applications explicitly invalidate health judged
-under an older policy while retaining inventory; it is disabled by default.
-
-The protocol layer preserves remote DNS, authentication, tolerant CONNECT replies,
-buffered tunnel bytes and SOCKS4a support. HTTPS proxy TLS is separate from
-destination TLS. Both verify certificates by default; opting into relaxed proxy
-TLS does not relax destination verification. Browser fingerprinting and content
-classification stay in the applications.
-
-Outcome methods log persistence failures; request-pool `Save` returns a checkpoint
-error to callers that require explicit durability confirmation. A request pool's
-`Close` detaches its store; a lease pool's `Close` stops background work and closes
-its clients and database. Release transfer leases before closing their pool.
+- [Persistent request rotation and discovery](docs/guide.md#persistent-request-rotation)
+- [Protocol selection, authentication and DNS](docs/guide.md#selecting-proxy-protocols)
+- [Retries, pacing and outcome classification](docs/guide.md#request-orchestration)
+- [Explicit exit IP detection](docs/guide.md#real-exit-ip-detection)
+- [Transfer leases, exit reservations and upgrades](docs/guide.md#transfer-leases)
+- [Persistence, compatibility and cleanup](docs/guide.md#persistence-and-compatibility)
+- [Troubleshooting and common questions](docs/troubleshooting.md)
 
 ## Development
+
+Run the same Go checks used in CI:
 
 ```sh
 go test -race ./...
 go vet ./...
-go test -cover ./...
 ```
 
-Tests use loopback servers, fake clocks and synthetic endpoints. They cover
-historical inventory migration, concurrency, selection, TLS separation, exit IP
-grouping and corrupt-state handling without using live proxies. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for releases and compatibility policy.
+`make help` lists optional shortcuts, including `make demo` and `make check`.
+Tests use loopback servers, fake clocks and synthetic endpoints; they do not
+require public proxies or live feeds. CI covers Linux, macOS and Windows.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, first contributions and releases.
+
+## Community
+
+Questions and bug reports are welcome through [GitHub Issues](https://github.com/JohanLindvall/proxytron/issues/new/choose).
+Read the [support guide](SUPPORT.md) for what to include, the
+[code of conduct](CODE_OF_CONDUCT.md) for community expectations, and
+[SECURITY.md](SECURITY.md) to report a vulnerability privately.
+
+If Proxytron helps your project, consider starring the repository so you can
+find it again and sharing it with other Go developers. Reproducible bug reports,
+documentation improvements and examples are useful contributions too.
+
+## License
+
+[MIT](LICENSE). See [GitHub Releases](https://github.com/JohanLindvall/proxytron/releases)
+for version history and compatibility notes.

@@ -1,0 +1,46 @@
+name: Bug report
+description: Report unexpected behavior with a small, reproducible example.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Proxytron. Search existing issues first.
+        Remove credentials and sensitive URLs; do not attach proxy databases.
+        Report vulnerabilities privately using [SECURITY.md](https://github.com/JohanLindvall/proxytron/blob/main/SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Proxytron version or commit
+      description: Run `go list -m github.com/JohanLindvall/proxytron` in your application.
+      placeholder: Version tag, pseudo-version or commit SHA
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Go version and platform
+      description: Include the output of `go version` and `go env GOOS GOARCH`.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: What were you trying to do, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include a small Go example or exact steps. Prefer loopback servers and synthetic endpoints.
+      placeholder: Steps, code and relevant configuration
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error output or diagnostics
+      description: Optional. Redact credentials, private destinations and other sensitive details.
+      render: text

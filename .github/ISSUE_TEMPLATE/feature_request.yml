@@ -1,0 +1,26 @@
+name: Feature request
+description: Describe a use case or an improvement to the API, documentation or examples.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Tell us about the problem you want to solve. A proposed implementation is optional.
+        Please search existing issues and keep credentials and private URLs out of examples.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Use case
+      description: What are you trying to accomplish, and what is difficult today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Suggested behavior
+      description: What would make this easier? An API sketch or example is welcome.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives or workarounds
+      description: What have you tried, and could an example or caller adapter address the need?

@@ -1,8 +1,29 @@
 # Examples
 
-Run these commands from the repository root with your own destination and proxy.
-They make network requests only to the URLs you supply. Both stop on Ctrl+C or
-their overall `-timeout`, and write response bytes to stdout.
+Run these commands from the repository root with Go 1.26 or later.
+New to Proxytron? Start with the local quickstart.
+
+| Example | What it demonstrates | What you need |
+| --- | --- | --- |
+| [quickstart](quickstart/main.go) | Route selection, client reuse and success reporting | Go; all request traffic stays on loopback |
+| [rotate](rotate/main.go) | Persistent request rotation, retries and pacing | Your destination and proxy URLs |
+| [transfer](transfer/main.go) | Streaming through a reserved route with exit confirmation | Your destination, proxy and IP-check URLs |
+
+## Local quickstart
+
+```sh
+go run ./examples/quickstart
+```
+
+The demo starts a local destination and two HTTP proxy fixtures, sends four
+requests with round-robin selection, and prints which proxy served each request.
+It closes its servers, clients and in-memory pool when it finishes; it creates
+no database and needs no proxy credentials or public service. Its expected output
+is also checked by `go test ./...`. Go may download dependencies on the first run.
+
+The following examples use the URLs you supply. Replace the `.example.test`
+placeholders before running them. Both stop on Ctrl+C or their overall
+`-timeout`, and write response bytes to stdout. Use `-h` to see all options.
 
 ## Persistent request rotation
 

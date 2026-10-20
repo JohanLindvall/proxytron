@@ -1,0 +1,22 @@
+name: Usage question
+description: Ask for help with setup, configuration or integration.
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Questions are welcome. The [troubleshooting guide](https://github.com/JohanLindvall/proxytron/blob/main/docs/troubleshooting.md)
+        and [examples](https://github.com/JohanLindvall/proxytron/tree/main/examples) may help.
+        Use synthetic endpoints and remove credentials from any code or logs.
+  - type: textarea
+    id: question
+    attributes:
+      label: What would you like to do?
+      description: Describe your goal and where you got stuck.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: What have you tried?
+      description: Include relevant code, configuration and the Proxytron version if available.

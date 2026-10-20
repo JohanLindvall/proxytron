@@ -31,7 +31,7 @@ Three aspects particularly distinguish Proxytron:
   caller-configured IP services; the application must preserve the session used
   for probing and destination work. This matters when destination limits apply
   per IP. See [exit reservations](../lease/exit.go) and the
-  [transfer lease documentation](../README.md#transfer-leases).
+  [transfer lease documentation](guide.md#transfer-leases).
 - **Long transfers have their own scheduling model.** Selection includes setup
   time, bandwidth and remaining bytes. `Lease.Upgrade` reserves a replacement
   when sustained measurements justify switching; the application handles
